@@ -131,6 +131,8 @@ class ProfileRepositoryImpl @Inject constructor(
         val matchContentFrameRate: Boolean? = null,
         val theme: ProfileTheme? = null,
         val avatarImage: String? = null,
+        val categoryOrder: List<String> = emptyList(),
+        val hiddenHomeRows: Set<String> = emptySet(),
     ) {
         fun toProfile(legacyFirst: Boolean, legacyOnly: Boolean, legacyHidden: Set<String>) = Profile(
             id, name, avatar, traktUser, pinHash, kids,
@@ -152,6 +154,8 @@ class ProfileRepositoryImpl @Inject constructor(
             matchContentFrameRate = matchContentFrameRate ?: true,
             theme = theme ?: ProfileTheme.BAMBI,
             avatarImage = avatarImage,
+            categoryOrder = categoryOrder,
+            hiddenHomeRows = hiddenHomeRows,
         )
 
         companion object {
@@ -178,6 +182,8 @@ class ProfileRepositoryImpl @Inject constructor(
                 matchContentFrameRate = p.matchContentFrameRate,
                 theme = p.theme,
                 avatarImage = p.avatarImage,
+                categoryOrder = p.categoryOrder,
+                hiddenHomeRows = p.hiddenHomeRows,
             )
         }
     }
