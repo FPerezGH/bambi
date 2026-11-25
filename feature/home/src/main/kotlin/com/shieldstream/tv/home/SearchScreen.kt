@@ -84,7 +84,8 @@ fun SearchScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val configuredPageSize by viewModel.pageSize.collectAsStateWithLifecycle()
-    var orderMode by rememberSaveable { mutableStateOf("original") }
+    var orderMode by rememberSaveable { mutableStateOf("rating") }
+    var carouselMode by rememberSaveable { mutableStateOf(false) }
     var orderYear by rememberSaveable { mutableStateOf(0) }
     var page by rememberSaveable(query, orderMode, orderYear, configuredPageSize) { mutableStateOf(0) }
     var lockedPick by remember { mutableStateOf<CatalogItem?>(null) }
@@ -146,7 +147,7 @@ fun SearchScreen(
     }
 
     Row(Modifier.fillMaxSize().background(Color.Black)) {
-        Column(
+        if (!carouselMode) Column(
             Modifier
                 .width(if (qwerty) 452.dp else 330.dp)
                 .fillMaxHeight()
@@ -228,6 +229,9 @@ fun SearchScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.weight(1f),
                 )
+                KeyButton(width = 94.dp, onClick = { carouselMode = !carouselMode }) {
+                    Text(if (carouselMode) "Cuadrícula" else "Carrusel", color = it, style = MaterialTheme.typography.bodySmall)
+                }
                 CatalogOrderControl(orderMode, orderYear, { orderMode = it }, { orderYear = it })
             }
             val originalItems = when (val s = state) {
@@ -293,7 +297,23 @@ fun SearchScreen(
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                 )
             }
-            LazyVerticalGrid(
+            if (carouselMode && items.isNotEmpty() && locked.isEmpty()) {
+                val rows = remember(items) {
+                    listOf(com.shieldstream.tv.model.CatalogRow("search_page", "Resultados", items))
+                }
+                Box(Modifier.fillMaxSize()) {
+                    androidx.compose.runtime.key(currentPage, query, orderMode, orderYear) {
+                        RowsBrowserContent(
+                            rows = rows,
+                            onItemClick = onItemClick,
+                            onRemoveContinue = {},
+                            onRemoveMyList = {},
+                            onExitTop = { carouselMode = false },
+                            onBack = { carouselMode = false },
+                        )
+                    }
+                }
+            } else LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Adaptive(118.dp),
                 contentPadding = PaddingValues(12.dp),
