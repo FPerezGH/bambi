@@ -19,6 +19,20 @@ import retrofit2.http.Query
 import retrofit2.http.QueryMap
 
 interface TmdbApi {
+    @GET("3/{type}/{id}/watch/providers")
+    suspend fun watchProviders(
+        @Path("type") type: String,
+        @Path("id") id: Int,
+        @Query("api_key") key: String,
+    ): com.shieldstream.tv.network.dto.TmdbWatchProviders
+
+    @GET("3/watch/providers/{type}")
+    suspend fun providerList(
+        @Path("type") type: String,
+        @Query("api_key") key: String,
+        @Query("watch_region") region: String = "ES",
+    ): com.shieldstream.tv.network.dto.TmdbProviderList
+
 
     @GET("3/trending/all/day")
     suspend fun trendingAll(
