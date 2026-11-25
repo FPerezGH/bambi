@@ -257,10 +257,19 @@ class CatalogRepositoryImpl @Inject constructor(
             val advanced = cinefranSearch(query)
             if (advanced != null) return advanced
         }
-        return tmdb.search(key, query).results
+        return allTitleResults(query)
             .filter { !kids || it.genre_ids.any { g -> g in KIDS_GENRES } }
             .mapNotNull { it.toCatalogItemOrNull() } // descarta personas
             .filter { it.posterUrl != null }
+    }
+
+    private suspend fun allTitleResults(query: String): List<TmdbSearchResultDto> {
+        val first = tmdb.search(key, query)
+        val results = first.results.toMutableList()
+        for (page in 2..first.total_pages.coerceAtMost(500)) {
+            results += tmdb.searchPage(key, query, page).results
+        }
+        return results.distinctBy { it.media_type to it.id }
     }
 
     override suspend fun searchOutsideKids(query: String): List<CatalogItem> {
