@@ -53,6 +53,11 @@ import com.shieldstream.tv.ui.component.LineIcons
 import com.shieldstream.tv.ui.component.SourceMediaBadges
 import com.shieldstream.tv.ui.component.tvClickable
 import java.util.Locale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.graphics.ColorFilter
 
 // Ficha → lista de fuentes: estado de los buscadores, filtros y cada fuente.
 
@@ -120,6 +125,9 @@ internal fun SourcesPanel(
     autoPick: StreamSource? = null,
 ) {
     val firstRequester = remember { FocusRequester() }
+    val official = state.details.officialProviders
+    val context = LocalContext.current
+    var officialError by remember { mutableStateOf<String?>(null) }
     val allSources = (state.sources as? SourcesState.Ready)?.sources.orEmpty().filter { !it.isMarkedBroken(state.brokenSources) }
     var brokenCandidate by remember { mutableStateOf<StreamSource?>(null) }
     var showAll by remember { mutableStateOf(false) }
@@ -198,6 +206,49 @@ internal fun SourcesPanel(
                 }
             }
             Spacer(Modifier.height(16.dp))
+
+            if (official.isNotEmpty()) {
+                Text("Plataformas oficiales · JustWatch / TMDB", color = Grey,
+                    style = MaterialTheme.typography.labelMedium)
+                LazyColumn(
+                    modifier = Modifier.weight(0.35f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(official, key = { it.id }) { provider ->
+                        var focused by remember { mutableStateOf(false) }
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .background(if (focused) Color.White else Color.White.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                                .onFocusChanged { focused = it.isFocused }
+                                .tvClickable(onClick = {
+                                    officialError = null
+                                    val url = provider.availabilityUrl
+                                    if (url == null) {
+                                        officialError = "No hay enlace de disponibilidad."
+                                    } else {
+                                        try {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                        } catch (_: Exception) {
+                                            officialError = "No hay una aplicación que pueda abrir este enlace."
+                                        }
+                                    }
+                                })
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AsyncImage(model = provider.logoUrl, contentDescription = null,
+                                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(5.dp)))
+                            Spacer(Modifier.width(12.dp))
+                            Text(provider.name, color = if (focused) Color.Black else Color.White,
+                                modifier = Modifier.weight(1f))
+                            Text("Ver disponibilidad ›", color = if (focused) Color.Black else Grey,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                officialError?.let { Text(it, color = Grey) }
+                Spacer(Modifier.height(12.dp))
+            }
             when (val s = state.sources) {
                 SourcesState.Idle -> Text(localizedStringResource(StringsR.string.details_pick_an_episode_first), color = Grey)
                 SourcesState.Loading -> Text(localizedStringResource(StringsR.string.details_finding_sources), color = Grey)
