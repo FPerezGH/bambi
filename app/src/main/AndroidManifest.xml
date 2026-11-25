@@ -17,6 +17,15 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <queries>
+        <package android:name="com.netflix.ninja" />
+        <package android:name="com.amazon.amazonvideo.livingroom" />
+        <package android:name="com.wbd.stream" />
+        <package android:name="com.hbo.hbonow" />
+        <package android:name="es.plus.yomvi" />
+        <package android:name="com.vodafone.vtv" />
+    </queries>
+
     <application
         android:name=".App"
         android:largeHeap="true"
