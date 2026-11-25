@@ -60,6 +60,8 @@ import com.shieldstream.tv.ui.component.LabeledPosterCard
 import com.shieldstream.tv.ui.component.firstVirtualIndex
 import com.shieldstream.tv.ui.component.formatEpisodeDate
 import com.shieldstream.tv.ui.component.loopingItems
+import com.shieldstream.tv.ui.component.tvClickable
+import androidx.compose.ui.focus.onFocusChanged
 import com.shieldstream.tv.ui.component.onBackKey
 import com.shieldstream.tv.ui.component.rememberLoopingRowState
 import com.shieldstream.tv.ui.component.requestFocusWithRetry
@@ -74,6 +76,124 @@ import androidx.compose.runtime.snapshots.Snapshot
 
 @Composable
 internal fun RowsBrowser(
+    rows: List<CatalogRow>,
+    onItemClick: (CatalogItem) -> Unit,
+    onRemoveContinue: (CatalogItem) -> Unit,
+    onRemoveMyList: (CatalogItem) -> Unit,
+    onExitTop: (() -> Unit)?,
+    onNewEpisodeClick: ((CatalogItem, Episode) -> Unit)? = null,
+    onContinueClick: ((CatalogItem, ContinueInfo) -> Unit)? = null,
+    onUpNextClick: ((CatalogItem, Episode) -> Unit)? = null,
+    onMarkUpNextWatched: ((CatalogItem, Episode) -> Unit)? = null,
+    onRemoveUpNext: ((CatalogItem, Episode) -> Unit)? = null,
+    onBack: () -> Unit,
+    header: String? = null,
+) {
+    var mode by rememberSaveable { mutableStateOf("original") }
+    var year by rememberSaveable { mutableStateOf(0) }
+    val orderRequester = remember { FocusRequester() }
+    val visible = remember(rows, mode, year) {
+        rows.mapNotNull { row ->
+            if (row.style != RowStyle.POSTER) row
+            else row.copy(items = orderCatalogItems(row.items, mode, year)).takeIf { it.items.isNotEmpty() }
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        if (visible.isNotEmpty()) {
+            key(mode, year) {
+                RowsBrowserContent(
+                    rows = visible, onItemClick = onItemClick, onRemoveContinue = onRemoveContinue,
+                    onRemoveMyList = onRemoveMyList, onExitTop = { orderRequester.requestFocus() },
+                    onNewEpisodeClick = onNewEpisodeClick, onContinueClick = onContinueClick,
+                    onUpNextClick = onUpNextClick, onMarkUpNextWatched = onMarkUpNextWatched,
+                    onRemoveUpNext = onRemoveUpNext, onBack = onBack, header = header,
+                )
+            }
+        } else {
+            Text("No hay títulos para el año seleccionado", color = Color.White,
+                modifier = Modifier.align(Alignment.Center))
+            LaunchedEffect(mode, year) { orderRequester.requestFocus() }
+        }
+        CatalogOrderControl(
+            mode = mode, year = year,
+            onMode = { mode = it }, onYear = { year = it },
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 24.dp, end = 32.dp)
+                .focusRequester(orderRequester)
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp && onExitTop != null) {
+                        onExitTop(); true
+                    } else false
+                },
+        )
+    }
+}
+
+internal fun orderCatalogItems(items: List<CatalogItem>, mode: String, year: Int): List<CatalogItem> {
+    val filtered = if (year == 0) items else items.filter { it.year == year }
+    val current = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    return when (mode) {
+        "rating" -> filtered.sortedWith(compareByDescending<CatalogItem> { it.rating ?: 0f }.thenByDescending { it.year ?: 0 })
+        "recent_best" -> filtered.sortedWith(compareByDescending<CatalogItem> {
+            (it.rating ?: 0f) - ((current - (it.year ?: 1900)).coerceAtLeast(0) * 0.12f)
+        }.thenByDescending { it.rating ?: 0f })
+        "newest" -> filtered.sortedByDescending { it.year ?: 0 }
+        "oldest" -> filtered.sortedBy { it.year ?: Int.MAX_VALUE }
+        else -> filtered
+    }
+}
+
+@Composable
+internal fun CatalogOrderControl(
+    mode: String, year: Int, onMode: (String) -> Unit, onYear: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var menu by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    var decade by remember { mutableStateOf<Int?>(null) }
+    var chooseYear by remember { mutableStateOf(false) }
+    val current = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    val options = listOf("original" to "Orden original", "rating" to "Valoración TMDB",
+        "recent_best" to "Mejores recientes", "newest" to "Más recientes", "oldest" to "Más antiguas")
+    val requester = remember { FocusRequester() }
+    fun close() { menu = false; chooseYear = false; decade = null; runCatching { requester.requestFocus() } }
+    Row(
+        modifier = modifier.focusRequester(requester)
+            .onFocusChanged { focused = it.isFocused }
+            .background(if (focused) Color.White else Color(0xCC222222), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .tvClickable(onClick = { menu = true })
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.Icon(AppIcons.List, contentDescription = "Ordenar y filtrar",
+            tint = if (focused) Color.Black else Color.White)
+        Text(if (year == 0) "  Ordenar" else "  $year", color = if (focused) Color.Black else Color.White)
+    }
+    if (menu) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { close() },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+            val actions = when {
+                decade != null -> (decade!!..minOf(decade!! + 9, current)).reversed().map { y ->
+                    ActionMenuItem(y.toString(), null) { onYear(y); close() }
+                }
+                chooseYear -> listOf(ActionMenuItem("Todos los años", null) { onYear(0); close() }) +
+                    (current / 10 * 10 downTo 1900 step 10).map { d ->
+                        ActionMenuItem("$d – ${minOf(d + 9, current)}", null) { decade = d }
+                    }
+                else -> options.map { (id, label) ->
+                    ActionMenuItem((if (mode == id) "✓ " else "") + label, AppIcons.List) { onMode(id); close() }
+                } + listOf(ActionMenuItem("Filtrar por año", AppIcons.Search) { chooseYear = true },
+                    ActionMenuItem("Restablecer", AppIcons.Check) { onMode("original"); onYear(0); close() })
+            }
+            key(chooseYear, decade) {
+                ActionMenuDialog(title = if (chooseYear) "Selecciona el año" else "Ordenar y filtrar",
+                    actions = actions, onDismiss = { close() })
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowsBrowserContent(
     rows: List<CatalogRow>,
     onItemClick: (CatalogItem) -> Unit,
     onRemoveContinue: (CatalogItem) -> Unit,
