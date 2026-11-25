@@ -526,7 +526,7 @@ class CatalogRepositoryImpl @Inject constructor(
         }
 
     private fun TmdbVideosDto?.trailers(): List<String> = this?.results.orEmpty()
-        .map { VideoInfo(it.key, it.site, it.type, it.official, it.iso_639_1) }
+        .map { VideoInfo(it.key, it.site, it.type, it.official, it.iso_639_1, it.iso_3166_1) }
         .let { Trailers.rank(it, if (Lang.isEnglish) "en" else "es") }
         .take(MAX_TRAILERS)
 
