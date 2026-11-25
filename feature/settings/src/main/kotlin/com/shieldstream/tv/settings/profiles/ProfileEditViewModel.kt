@@ -105,6 +105,23 @@ class ProfileEditViewModel @Inject constructor(
         edit { it.copy(profile = it.profile.copy(hiddenCategories = next), confirmDelete = false) }
     }
 
+    fun moveCategory(category: Category, delta: Int) = edit { state ->
+        val order = (state.profile.categoryOrder + Category.entries.map { it.name }).distinct()
+            .filter { name -> Category.entries.any { it.name == name } }.toMutableList()
+        val from = order.indexOf(category.name)
+        val to = from + delta
+        if (from >= 0 && to in order.indices) {
+            val item = order.removeAt(from)
+            order.add(to, item)
+        }
+        state.copy(profile = state.profile.copy(categoryOrder = order))
+    }
+
+    fun toggleHomeRow(id: String) = edit { state ->
+        val hidden = state.profile.hiddenHomeRows
+        state.copy(profile = state.profile.copy(hiddenHomeRows = if (id in hidden) hidden - id else hidden + id))
+    }
+
     fun showAllCategories() = edit {
         it.copy(profile = it.profile.copy(hiddenCategories = emptySet()), confirmDelete = false)
     }
