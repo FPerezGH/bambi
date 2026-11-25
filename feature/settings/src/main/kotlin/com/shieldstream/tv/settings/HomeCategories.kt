@@ -54,6 +54,8 @@ internal fun HomeCategoriesDialog(
     onToggle: (Category) -> Unit,
     onShowAll: () -> Unit,
     onClose: () -> Unit,
+    order: List<String> = emptyList(),
+    onMove: (Category, Int) -> Unit = { _, _ -> },
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -73,25 +75,29 @@ internal fun HomeCategoriesDialog(
             Text(localizedStringResource(StringsR.string.settings_home_categories), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text(
-                localizedStringResource(StringsR.string.settings_ok_shows_or_hides_each_one_back),
+                "OK: mostrar u ocultar · Flechas ↑ ↓: cambiar posición",
                 color = Dim,
                 fontSize = 16.sp,
             )
             Spacer(Modifier.height(18.dp))
             LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
+                columns = GridCells.Fixed(1),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(4.dp),
                 modifier = Modifier.height(300.dp),
             ) {
-                itemsIndexed(Category.entries, key = { _, c -> c.name }) { index, category ->
+                itemsIndexed((order + Category.entries.map { it.name }).distinct().mapNotNull { name -> Category.entries.firstOrNull { it.name == name } }, key = { _, c -> c.name }) { index, category ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CategoryToggle(
                         category = category,
                         shown = category.name !in hidden,
                         onClick = { onToggle(category) },
-                        modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
+                        modifier = Modifier.weight(1f).then(if (index == 0) Modifier.focusRequester(first) else Modifier),
                     )
+                    DialogButton("↑") { onMove(category, -1) }
+                    DialogButton("↓") { onMove(category, 1) }
+                    }
                 }
             }
             Spacer(Modifier.height(18.dp))
