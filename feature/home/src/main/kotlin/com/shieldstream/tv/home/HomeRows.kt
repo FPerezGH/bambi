@@ -193,7 +193,7 @@ internal fun CatalogOrderControl(
 }
 
 @Composable
-private fun RowsBrowserContent(
+internal fun RowsBrowserContent(
     rows: List<CatalogRow>,
     onItemClick: (CatalogItem) -> Unit,
     onRemoveContinue: (CatalogItem) -> Unit,
