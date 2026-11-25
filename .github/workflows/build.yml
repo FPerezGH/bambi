@@ -5,7 +5,7 @@ name: Build
 
 on:
   push:
-    branches: [main, cinefran]
+    branches: [cinefran, cinefran-next]
   pull_request:
   workflow_dispatch:
 
@@ -38,14 +38,29 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build debug APK and run unit tests
-        run: ./gradlew --no-daemon assembleDebug :core:model:test :core:domain:test testDebugUnitTest
+        run: ./gradlew --no-daemon --no-build-cache clean assembleDebug :core:model:test :core:domain:test testDebugUnitTest
 
       - name: Run Android lint
         run: ./gradlew --no-daemon lintDebug
 
+      - name: Verify APK identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)
+          test -n "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | tee apk-identity.txt
+          grep -F "package: name='com.cinefran.tv.debug'" apk-identity.txt
+          grep -F "versionCode='109'" apk-identity.txt
+          grep -F "versionName='0.2.1-pruebas'" apk-identity.txt
+          mkdir -p verified-apk
+          cp "$APK" verified-apk/CINEFRAN-0.2.1.apk
+          sha256sum verified-apk/CINEFRAN-0.2.1.apk | tee verified-apk/SHA256.txt
+          cp apk-identity.txt verified-apk/
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: CINEFRAN-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: CINEFRAN-0.2.1
+          path: verified-apk/
           retention-days: 14
