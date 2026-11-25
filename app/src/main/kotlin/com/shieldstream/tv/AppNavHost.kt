@@ -67,7 +67,7 @@ fun AppNavHost(
     // Al abrir en frío, la intro de Bambi (mientras se precarga el Inicio) va ENCIMA de "¿Quién está viendo?", que ya
     // está debajo: al terminar, la película avanza y el fotograma siguiente es esa pantalla (reveal 0→1, IntroReveal).
     val start = remember { if (gate.needsSetup) "setup" else "profiles" }
-    var coldIntro by remember { mutableStateOf(!gate.needsSetup) }
+    var coldIntro by remember { mutableStateOf(false) }
     var reveal by remember { mutableFloatStateOf(if (coldIntro) 0f else 1f) }
     // Para que el gato vaya fluido, lo pesado (montar la navegación y "¿Quién está viendo?") se hace con la intro
     // quieta en rojo: primero se pinta la intro, luego se monta lo de debajo y, ya montado, arranca la animación.
@@ -94,6 +94,7 @@ fun AppNavHost(
     LaunchedEffect(coldIntro) {
         intro.setUiBusy(coldIntro)
         if (!coldIntro) {
+            intro.start()
             kotlinx.coroutines.delay(ICON_WARM_DELAY_MS)
             intro.warmAllProfileIcons()
         }
