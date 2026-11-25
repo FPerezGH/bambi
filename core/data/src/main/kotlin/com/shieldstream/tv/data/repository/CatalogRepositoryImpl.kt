@@ -285,12 +285,31 @@ class CatalogRepositoryImpl @Inject constructor(
             .find(q)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
         val vampire = q.contains("vampir")
         val decade = Regex("anos\\s+(\\d{2}|\\d{4})\\b").find(q)?.groupValues?.get(1)?.toIntOrNull()
-        if (genre == null && rating == null && !vampire && decade == null) return null
+        val providerNames = listOf("netflix", "prime video", "hbo max", "movistar", "vodafone")
+            .filter { q.contains(it) }
+        val duration = Regex("menos de (\\d+) minutos").find(q)?.groupValues?.get(1)?.toIntOrNull()
+        val spanish = Regex("\\b(espanolas?|espanoles?)\\b").containsMatchIn(q)
+        val structured = Regex("\\b(peliculas?|series?|mejores|comedias?|dramas?|thrillers?)\\b").containsMatchIn(q)
+        if (!structured && rating == null && duration == null) return null
+        if (genre == null && rating == null && !vampire && decade == null && providerNames.isEmpty() && duration == null && !spanish) return null
         val params = mutableMapOf("include_adult" to "false", "sort_by" to "vote_average.desc",
             "vote_count.gte" to if (series) "100" else "300", "language" to "es-ES")
         val tvGenre = when (genre) { 28, 12 -> 10759; 878 -> 10765; 27, 53, 10749 -> null; else -> genre }
         (if (series) tvGenre else genre)?.let { params["with_genres"] = it.toString() }
         rating?.let { params["vote_average.gte"] = it.toString() }
+        duration?.let { params["with_runtime.lte"] = (it - 1).coerceAtLeast(0).toString() }
+        if (spanish) params["with_original_language"] = "es"
+        if (providerNames.isNotEmpty()) {
+            val ids = tmdb.providerList(if (series) "tv" else "movie", key).results
+                .filter { provider ->
+                    val name = provider.provider_name.lowercase(java.util.Locale.ROOT)
+                    isCinefranProvider(name) && providerNames.any { name.contains(it) || (it == "hbo max" && name == "max") }
+                }.map { it.provider_id }.distinct()
+            if (ids.isEmpty()) return emptyList()
+            params["watch_region"] = "ES"
+            params["with_watch_providers"] = ids.joinToString("|")
+            params["with_watch_monetization_types"] = "flatrate"
+        }
         decade?.let {
             val year = if (it < 100) 1900 + it else it
             val field = if (series) "first_air_date" else "primary_release_date"
