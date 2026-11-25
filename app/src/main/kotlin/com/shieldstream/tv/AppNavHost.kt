@@ -46,7 +46,6 @@ import com.shieldstream.tv.settings.profiles.TraktConnectScreen
 import com.shieldstream.tv.settings.requests.RequestsScreen
 import com.shieldstream.tv.settings.phoneconfig.PhoneConfigMode
 import com.shieldstream.tv.settings.phoneconfig.PhoneConfigScreen
-import com.shieldstream.tv.settings.update.UpdatePrompt
 import com.shieldstream.tv.ui.component.restartApp
 import com.shieldstream.tv.watchnext.WatchNextNavigationViewModel
 import com.shieldstream.tv.watchnext.WatchNextRequest
@@ -175,7 +174,6 @@ fun AppNavHost(
                 onAdd = { if (entry.isVisible()) navController.navigate("profile_edit/${ProfileEditViewModel.NEW}") },
             )
             // El aviso de actualización es un diálogo (va por encima de todo): que espere a que acabe la intro.
-            if (!coldIntro) UpdatePrompt()
         }
         composable("profile_edit/{id}") { entry ->
             ProfileEditScreen(
@@ -241,7 +239,6 @@ fun AppNavHost(
                 },
                 onOpenSettings = { navController.navigate("settings") },
             )
-            UpdatePrompt()
         }
         composable("details") { entry ->
             val context = LocalContext.current
