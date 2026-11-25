@@ -124,6 +124,7 @@ class HomeDiskCache @Inject constructor(@ApplicationContext context: Context) {
         putOpt("backdropUrl", backdropUrl)
         year?.let { put("year", it) }
         rating?.let { put("rating", it.toDouble()) }
+        put("voteCount", voteCount)
         put("genres", JSONArray(genres))
     }
 
@@ -137,6 +138,7 @@ class HomeDiskCache @Inject constructor(@ApplicationContext context: Context) {
         backdropUrl = str("backdropUrl"),
         year = if (has("year")) getInt("year") else null,
         rating = if (has("rating")) getDouble("rating").toFloat() else null,
+        voteCount = optInt("voteCount"),
         genres = optJSONArray("genres")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
     )
 
@@ -145,7 +147,7 @@ class HomeDiskCache @Inject constructor(@ApplicationContext context: Context) {
 
     private companion object {
         const val TAG = "HomeDiskCache"
-        const val VERSION = 1
+        const val VERSION = 2
 
         /** Marca de las portadas que ya guardan `trailerKey`. */
         const val FEATURED_TRAILERS = "featuredTrailers"
