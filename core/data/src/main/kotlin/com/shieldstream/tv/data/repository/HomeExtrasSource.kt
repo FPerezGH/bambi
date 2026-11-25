@@ -212,6 +212,7 @@ class HomeExtrasSource @Inject constructor(
         type = type,
         official = official,
         language = iso_639_1,
+        country = iso_3166_1,
     )
 
     private fun readPicks(raw: String?, week: String): List<Pick>? {
