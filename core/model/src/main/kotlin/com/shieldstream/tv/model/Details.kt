@@ -59,6 +59,7 @@ data class VideoInfo(
     val type: String,
     val official: Boolean,
     val language: String?,
+    val country: String? = null,
 )
 
 object Trailers {
@@ -84,7 +85,15 @@ object Trailers {
                 val type = video.type.normalized()?.let { TYPE_ORDER.indexOf(it) }?.takeIf { it >= 0 } ?: return@mapNotNull null
                 if (!video.site.equals("YouTube", ignoreCase = true) || video.key.isBlank()) return@mapNotNull null
                 val videoLanguage = video.language.normalized()
-                val languageRank = when {
+                val languageRank = if (appLanguage == "es") {
+                    when {
+                        videoLanguage == "es" && video.country.equals("ES", ignoreCase = true) -> 0
+                        videoLanguage == "es" && video.country.isNullOrBlank() -> 1
+                        videoLanguage == "en" -> 2
+                        videoLanguage == "es" -> 3
+                        else -> 4
+                    }
+                } else when {
                     videoLanguage == appLanguage -> 0
                     videoLanguage == "en" -> 1
                     else -> 2
