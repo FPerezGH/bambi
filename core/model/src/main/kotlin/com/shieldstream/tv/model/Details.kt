@@ -22,6 +22,7 @@ data class CatalogDetails(
     val trailerKeys: List<String> = emptyList(),
     /** Saga a la que pertenece la película, si TMDB la agrupa en una colección. */
     val collection: CollectionRef? = null,
+    val officialProviders: List<OfficialProvider> = emptyList(),
 )
 
 data class Person(
@@ -129,4 +130,11 @@ data class ShowEpisodeStatus(
     val item: CatalogItem,
     val availableEpisodes: List<Episode> = emptyList(),
     val upcomingEpisode: Episode? = null,
+)
+
+data class OfficialProvider(
+    val id: Int,
+    val name: String,
+    val logoUrl: String?,
+    val availabilityUrl: String?,
 )
