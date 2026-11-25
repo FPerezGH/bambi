@@ -101,6 +101,8 @@ class HomeViewModel @Inject constructor(
     private val preloader: HomePreloader,
 ) : ViewModel() {
 
+    val activeProfile = profiles.active
+
     val kidsProfile: Boolean = profiles.active.value.kids
 
     val hiddenCategories: StateFlow<Set<String>> = settings.hiddenCategories
