@@ -88,17 +88,11 @@ fun TopBar(
             modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp),
         ) {
             // Marca de Bambi: gatito + "BAMBI" (no enfocable). Las esquinas redondeadas ya vienen en el PNG.
-            Image(
-                painter = painterResource(R.drawable.bambi_logo),
-                contentDescription = "Bambi",
-                modifier = Modifier.size(40.dp),
-            )
-            Spacer(Modifier.width(12.dp))
-            Image(
-                painter = painterResource(R.drawable.bambi_wordmark),
-                contentDescription = null,
-                modifier = Modifier.height(22.dp),
-            )
+            Icon(AppIcons.Play, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(32.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("CINEFRAN", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+            Spacer(Modifier.width(6.dp))
+            Text("0.2.1", color = Color(0xFFE53935), fontSize = 11.sp)
         }
         Row(
             modifier = Modifier.align(Alignment.Center),
