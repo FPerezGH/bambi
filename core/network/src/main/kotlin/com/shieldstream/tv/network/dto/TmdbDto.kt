@@ -290,3 +290,22 @@ data class TmdbPersonCrewCreditDto(
     val job: String? = null,
     val genre_ids: List<Int> = emptyList(),
 )
+
+@Serializable
+data class TmdbWatchProviders(val results: Map<String, TmdbWatchRegion> = emptyMap())
+
+@Serializable
+data class TmdbWatchRegion(
+    val link: String? = null,
+    val flatrate: List<TmdbWatchProvider> = emptyList(),
+)
+
+@Serializable
+data class TmdbWatchProvider(
+    val provider_id: Int = 0,
+    val provider_name: String = "",
+    val logo_path: String? = null,
+)
+
+@Serializable
+data class TmdbProviderList(val results: List<TmdbWatchProvider> = emptyList())
