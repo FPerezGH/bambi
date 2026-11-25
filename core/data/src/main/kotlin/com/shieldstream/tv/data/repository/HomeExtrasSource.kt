@@ -293,7 +293,7 @@ class HomeExtrasSource @Inject constructor(
         loaders.mapIndexed { index, (title, load) ->
             async {
                 runCatching {
-                    val items = load().filter { it.posterUrl != null }.distinctBy { it.key }
+                    val items = load().filter { it.posterUrl != null }.distinctBy { it.key }.take(50)
                     CatalogRow(id = "cat_${category.name}_$index", title = title, items = items)
                 }.getOrNull()
             }
@@ -383,13 +383,25 @@ class HomeExtrasSource @Inject constructor(
     }
 
     private suspend fun movies(q: Query, extra: Map<String, String>, page: Int = 1): List<CatalogItem> {
-        val p = params(q, extra, page) ?: return emptyList()
-        return tmdb.discoverMovieQuery(key, p).results.map { it.toCatalogItem() }
+        val firstPage = (page - 1) * 3 + 1
+        val p = params(q, extra, firstPage) ?: return emptyList()
+        val first = tmdb.discoverMovieQuery(key, p)
+        val result = first.results.toMutableList()
+        for (next in firstPage + 1..minOf(firstPage + 2, first.total_pages)) {
+            result += tmdb.discoverMovieQuery(key, p + ("page" to next.toString())).results
+        }
+        return result.map { it.toCatalogItem() }.filter { it.posterUrl != null }.distinctBy { it.key }.take(50)
     }
 
     private suspend fun series(q: Query, extra: Map<String, String>, page: Int = 1): List<CatalogItem> {
-        val p = params(q, extra, page) ?: return emptyList()
-        return tmdb.discoverTvQuery(key, p).results.map { it.toCatalogItem() }
+        val firstPage = (page - 1) * 3 + 1
+        val p = params(q, extra, firstPage) ?: return emptyList()
+        val first = tmdb.discoverTvQuery(key, p)
+        val result = first.results.toMutableList()
+        for (next in firstPage + 1..minOf(firstPage + 2, first.total_pages)) {
+            result += tmdb.discoverTvQuery(key, p + ("page" to next.toString())).results
+        }
+        return result.map { it.toCatalogItem() }.filter { it.posterUrl != null }.distinctBy { it.key }.take(50)
     }
 
     private suspend fun params(q: Query, extra: Map<String, String>, page: Int): Map<String, String>? {
