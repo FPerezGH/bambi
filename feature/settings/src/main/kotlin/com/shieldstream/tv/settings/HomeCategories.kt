@@ -110,7 +110,10 @@ internal fun HomeCategoriesDialog(
 }
 
 @Composable
-private fun CategoryToggle(category: Category, shown: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun CategoryToggle(category: Category, shown: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) = PreferenceToggle(category.localizedTitle(), shown, onClick, modifier)
+
+@Composable
+private fun PreferenceToggle(label: String, shown: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -137,7 +140,7 @@ private fun CategoryToggle(category: Category, shown: Boolean, onClick: () -> Un
         }
         Spacer(Modifier.width(12.dp))
         Text(
-            category.localizedTitle(),
+            label,
             color = if (shown) Color.White else Dim,
             fontSize = 16.sp,
             maxLines = 1,
@@ -160,4 +163,69 @@ private fun DialogButton(text: String, onClick: () -> Unit) {
             .tvClickable(onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),
     )
+}
+
+@Composable
+internal fun HomeRowsPreferencesDialog(
+    profile: com.shieldstream.tv.model.Profile,
+    onToggle: (String) -> Unit,
+    onMove: (com.shieldstream.tv.model.HomeFilter, String, Int) -> Unit,
+    onClose: () -> Unit,
+) {
+    val sections = com.shieldstream.tv.model.HomeSections
+    var filter by remember { mutableStateOf(com.shieldstream.tv.model.HomeFilter.ALL) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(150); runCatching { first.requestFocus() } }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(760.dp).background(Panel, RoundedCornerShape(18.dp)).padding(24.dp)) {
+            Text("Personalizar carruseles", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (tab in com.shieldstream.tv.model.HomeFilter.entries) {
+                    val title = when (tab) {
+                        com.shieldstream.tv.model.HomeFilter.ALL -> "Inicio"
+                        com.shieldstream.tv.model.HomeFilter.MOVIES -> "Películas"
+                        com.shieldstream.tv.model.HomeFilter.TV -> "Series"
+                    }
+                    DialogButton(if (tab == filter) "✓ $title" else title) { filter = tab }
+                }
+            }
+            val ids = sections.ids(filter)
+            val order = (profile.homeRowOrder[filter.name].orEmpty() + ids).distinct().filter { it in ids }
+            LazyVerticalGrid(columns = GridCells.Fixed(1), modifier = Modifier.height(300.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(order, key = { _, id -> id }) { index, id ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val key = sections.key(filter, id)
+                        PreferenceToggle(sections.labels[id] ?: id, key !in profile.hiddenHomeRows && id !in profile.hiddenHomeRows,
+                            { onToggle(key) }, Modifier.weight(1f).then(if (index == 0) Modifier.focusRequester(first) else Modifier))
+                        DialogButton("↑") { onMove(filter, id, -1) }
+                        DialogButton("↓") { onMove(filter, id, 1) }
+                    }
+                }
+            }
+            DialogButton("Aceptar", onClose)
+        }
+    }
+}
+
+@Composable
+internal fun PlatformPreferencesDialog(
+    profile: com.shieldstream.tv.model.Profile,
+    onToggle: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(150); runCatching { first.requestFocus() } }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(620.dp).background(Panel, RoundedCornerShape(18.dp)).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Mis plataformas", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Stremio conserva sus fuentes originales.", color = Dim, fontSize = 16.sp)
+            com.shieldstream.tv.model.StreamingPlatforms.labels.entries.forEachIndexed { index, entry ->
+                PreferenceToggle(entry.value, entry.key in profile.streamingPlatforms, { onToggle(entry.key) },
+                    if (index == 0) Modifier.focusRequester(first) else Modifier)
+            }
+            DialogButton("Aceptar", onClose)
+        }
+    }
 }

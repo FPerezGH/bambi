@@ -92,7 +92,7 @@ fun HomeScreen(
         is HomeUiState.Content -> {
             LaunchedEffect(Unit) { onContentReady() }
             HomeContent(
-            rows = s.rows,
+            rows = remember(s.rows, activeProfile, filter) { com.shieldstream.tv.model.HomeSections.apply(s.rows, activeProfile, filter) },
             featured = s.featured,
             categories = remember(filter, hidden, activeProfile.categoryOrder) {
                 when {

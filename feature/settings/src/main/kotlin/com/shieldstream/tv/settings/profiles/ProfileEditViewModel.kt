@@ -122,6 +122,20 @@ class ProfileEditViewModel @Inject constructor(
         state.copy(profile = state.profile.copy(hiddenHomeRows = if (id in hidden) hidden - id else hidden + id))
     }
 
+    fun moveHomeRow(filter: com.shieldstream.tv.model.HomeFilter, id: String, delta: Int) = edit { state ->
+        val ids = com.shieldstream.tv.model.HomeSections.ids(filter)
+        val order = (state.profile.homeRowOrder[filter.name].orEmpty() + ids).distinct().filter { it in ids }.toMutableList()
+        val from = order.indexOf(id)
+        val to = from + delta
+        if (from >= 0 && to in order.indices) order.add(to, order.removeAt(from))
+        state.copy(profile = state.profile.copy(homeRowOrder = state.profile.homeRowOrder + (filter.name to order)))
+    }
+
+    fun togglePlatform(id: String) = edit { state ->
+        val current = state.profile.streamingPlatforms
+        state.copy(profile = state.profile.copy(streamingPlatforms = if (id in current) current - id else current + id))
+    }
+
     fun showAllCategories() = edit {
         it.copy(profile = it.profile.copy(hiddenCategories = emptySet()), confirmDelete = false)
     }

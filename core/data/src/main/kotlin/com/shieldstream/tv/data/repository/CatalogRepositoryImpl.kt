@@ -180,7 +180,7 @@ class CatalogRepositoryImpl @Inject constructor(
         // Las páginas que hacen falta para llenar cada fila con el máximo elegido en Ajustes (20 por página).
         val pages = ((maxItems + TMDB_PAGE_SIZE - 1) / TMDB_PAGE_SIZE).coerceIn(1, MAX_HOME_PAGES)
         return if (kids) cachedRows("home_kids_${filter.name}_p$pages") { loadHome(kidsRowsFor(filter, pages), pages) }
-        else cachedRows("home_${filter.name}_p$pages") { loadHome(rowsFor(filter), pages) }
+        else cachedRows("home_${filter.name}_p${pages}_${profiles.active.value.streamingPlatforms.sorted().joinToString("_")}") { loadHome(rowsFor(filter), pages) }
     }
 
     private suspend fun loadHome(specs: List<RowSpec>, pages: Int): List<CatalogRow> = coroutineScope {
@@ -399,11 +399,8 @@ class CatalogRepositoryImpl @Inject constructor(
     }
 
 
-    private fun isCinefranProvider(name: String): Boolean {
-        val n = name.lowercase(java.util.Locale.ROOT)
-        return n == "netflix" || n == "amazon prime video" || n == "prime video" ||
-            n == "hbo max" || n == "max" || n.startsWith("movistar plus") || n == "vodafone tv"
-    }
+    private fun isCinefranProvider(name: String): Boolean =
+        com.shieldstream.tv.model.StreamingPlatforms.id(name) in profiles.active.value.streamingPlatforms
 
     private suspend fun officialProviders(item: CatalogItem): List<com.shieldstream.tv.model.OfficialProvider> {
         val id = item.id.toIntOrNull() ?: return emptyList()

@@ -20,6 +20,8 @@ data class Profile(
     val avatarImage: String? = null,
     val categoryOrder: List<String> = emptyList(),
     val hiddenHomeRows: Set<String> = emptySet(),
+    val homeRowOrder: Map<String, List<String>> = emptyMap(),
+    val streamingPlatforms: Set<String> = StreamingPlatforms.defaults,
 ) {
     val initial: String get() = name.trim().firstOrNull()?.uppercase() ?: "?"
 
