@@ -263,6 +263,62 @@ class CatalogRepositoryImpl @Inject constructor(
             .filter { it.posterUrl != null }
     }
 
+    override suspend fun searchFiltered(query: String, filters: com.shieldstream.tv.domain.CatalogSearchFilters): List<CatalogItem> {
+        // Preserve the child profile path; never run unrestricted discover for children.
+        if (kids) return if (query.isBlank()) trending().filter(filters::matches) else search(query).filter(filters::matches)
+        val q = query.trim()
+        if (q.isNotEmpty() && !filters.active) {
+            val results = search(q)
+            val explicitlySeries = Regex("\\bseries?\\b", RegexOption.IGNORE_CASE).containsMatchIn(q)
+            return results.filter { it.type == if (explicitlySeries) MediaType.TV else MediaType.MOVIE }
+        }
+        val type = if (filters.series) "tv" else "movie"
+        val genreMap = mapOf("comedia" to 35, "accion" to if (filters.series) 10759 else 28,
+            "drama" to 18, "ciencia ficcion" to if (filters.series) 10765 else 878,
+            "terror" to 27, "animacion" to 16, "documental" to 99)
+        val genre = genreMap[filters.genre]
+        val params = mutableMapOf("include_adult" to "false", "language" to "es-ES", "sort_by" to "popularity.desc",
+            "vote_count.gte" to if (filters.series) "100" else "300")
+        genre?.let { params["with_genres"] = it.toString() }
+        if (filters.minRating > 0) params["vote_average.gte"] = filters.minRating.toString()
+        if (filters.year > 0) params[if (filters.series) "first_air_date_year" else "primary_release_year"] = filters.year.toString()
+        if (filters.platform.isNotBlank()) {
+            if (filters.platform !in profiles.active.value.streamingPlatforms) return emptyList()
+            val ids = tmdb.providerList(type, key).results.filter {
+                com.shieldstream.tv.model.StreamingPlatforms.id(it.provider_name) == filters.platform
+            }.map { it.provider_id }.distinct()
+            if (ids.isEmpty()) return emptyList()
+            params["watch_region"] = "ES"
+            params["with_watch_providers"] = ids.joinToString("|")
+            params["with_watch_monetization_types"] = "flatrate"
+        }
+        if (q.isNotEmpty()) {
+            // Search titles first, then verify filters against actual TMDB metadata.
+            val candidates = allTitleResults(q).filter { it.media_type == type && (genre == null || genre in it.genre_ids) }
+                .mapNotNull { it.toCatalogItemOrNull() }.filter(filters::matches).filter { it.posterUrl != null }
+            return if (filters.platform.isBlank()) candidates else candidates.filter { item ->
+                officialProviders(item).any { com.shieldstream.tv.model.StreamingPlatforms.id(it.name) == filters.platform }
+            }
+        }
+        val items = mutableListOf<CatalogItem>()
+        var page = 1
+        var pages: Int
+        do {
+            val p = params + ("page" to page.toString())
+            if (filters.series) {
+                val result = tmdb.discoverTvQuery(key, p)
+                pages = result.total_pages
+                items += result.results.map { it.toCatalogItem() }
+            } else {
+                val result = tmdb.discoverMovieQuery(key, p)
+                pages = result.total_pages
+                items += result.results.map { it.toCatalogItem() }
+            }
+            page++
+        } while (page <= pages.coerceAtMost(500))
+        return items.filter { it.posterUrl != null }.distinctBy { it.key }
+    }
+
     private suspend fun allTitleResults(query: String): List<TmdbSearchResultDto> {
         val first = tmdb.search(key, query)
         val results = first.results.toMutableList()

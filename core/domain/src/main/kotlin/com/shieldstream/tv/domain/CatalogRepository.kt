@@ -26,6 +26,8 @@ interface CatalogRepository {
 
     suspend fun search(query: String): List<CatalogItem>
 
+    suspend fun searchFiltered(query: String, filters: CatalogSearchFilters): List<CatalogItem> = search(query).filter(filters::matches)
+
     /**
      * En un perfil infantil, lo que [search] deja fuera por no ser infantil: se enseña bloqueado para pedírselo a un
      * adulto. En los demás perfiles, vacío.
@@ -56,3 +58,18 @@ data class StreamResults(
     val unavailable: Map<String, String> = emptyMap(),
     val pending: Set<String> = emptySet(),
 )
+
+/** Filters are applied before pagination. Blank text allows browsing the selected catalog. */
+data class CatalogSearchFilters(
+    val series: Boolean = false,
+    val genre: String = "",
+    val minRating: Int = 0,
+    val platform: String = "",
+    val year: Int = 0,
+) {
+    val active: Boolean get() = series || genre.isNotBlank() || minRating > 0 || platform.isNotBlank() || year > 0
+    fun matches(item: CatalogItem): Boolean =
+        item.type == (if (series) MediaType.TV else MediaType.MOVIE) &&
+        (minRating == 0 || (item.rating ?: 0f) >= minRating) &&
+        (year == 0 || item.year == year)
+}

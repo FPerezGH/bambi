@@ -84,10 +84,13 @@ fun SearchScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val configuredPageSize by viewModel.pageSize.collectAsStateWithLifecycle()
+    val filters by viewModel.filters.collectAsStateWithLifecycle()
+    var filtersOpen by remember { mutableStateOf(false) }
+    if (filtersOpen) SearchFiltersDialog(filters, { viewModel.setFilters(it); filtersOpen = false }, { filtersOpen = false })
     var orderMode by rememberSaveable { mutableStateOf("recommended") }
     var carouselMode by rememberSaveable { mutableStateOf(true) }
     var orderYear by rememberSaveable { mutableStateOf(0) }
-    var page by rememberSaveable(query, orderMode, orderYear, configuredPageSize) { mutableStateOf(0) }
+    var page by rememberSaveable(query, orderMode, orderYear, configuredPageSize, filters.toString()) { mutableStateOf(0) }
     var lockedPick by remember { mutableStateOf<CatalogItem?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -147,7 +150,7 @@ fun SearchScreen(
     }
 
     Row(Modifier.fillMaxSize().background(Color.Black)) {
-        if (!carouselMode || state !is SearchUiState.Results) Column(
+        if (!carouselMode || state !is SearchUiState.Results || (state as? SearchUiState.Results)?.locked?.isNotEmpty() == true) Column(
             Modifier
                 .width(if (qwerty) 452.dp else 330.dp)
                 .fillMaxHeight()
@@ -232,6 +235,7 @@ fun SearchScreen(
                 KeyButton(width = 94.dp, onClick = { carouselMode = !carouselMode }) {
                     Text(if (carouselMode) "Cuadrícula" else "Carrusel", color = it, style = MaterialTheme.typography.bodySmall)
                 }
+                KeyButton(width = 90.dp, onClick = { filtersOpen = true }) { Text("Filtros", color = it) }
                 CatalogOrderControl(orderMode, orderYear, { orderMode = it }, { orderYear = it })
             }
             val originalItems = when (val s = state) {
@@ -465,5 +469,46 @@ private fun androidx.compose.foundation.layout.BoxScope.LockedOverlay(asked: Boo
             color = Color.White,
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
         )
+    }
+}
+
+@Composable
+private fun SearchFiltersDialog(
+    current: com.shieldstream.tv.domain.CatalogSearchFilters,
+    onApply: (com.shieldstream.tv.domain.CatalogSearchFilters) -> Unit,
+    onClose: () -> Unit,
+) {
+    var draft by remember { mutableStateOf(current) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { withFrameNanos { }; runCatching { first.requestFocus() } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(760.dp).background(Color(0xFF1C1C1F), RoundedCornerShape(16.dp)).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Filtros de búsqueda", color = Color.White, style = MaterialTheme.typography.titleLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyButton(150.dp, { draft = draft.copy(series = false) }, Modifier.focusRequester(first)) { Text(if (!draft.series) "✓ Películas" else "Películas", color = it) }
+                KeyButton(150.dp, { draft = draft.copy(series = true) }) { Text(if (draft.series) "✓ Series" else "Series", color = it) }
+            }
+            val genres = listOf("" to "Todos", "comedia" to "Comedia", "accion" to "Acción", "drama" to "Drama", "ciencia ficcion" to "Ciencia ficción", "terror" to "Terror", "animacion" to "Animación", "documental" to "Documental")
+            val gi = genres.indexOfFirst { it.first == draft.genre }.coerceAtLeast(0)
+            KeyButton(330.dp, { draft = draft.copy(genre = genres[(gi + 1) % genres.size].first) }) { Text("Género: " + genres[gi].second, color = it) }
+            val ratings = listOf(0, 6, 7, 8, 9)
+            KeyButton(330.dp, { draft = draft.copy(minRating = ratings[(ratings.indexOf(draft.minRating).coerceAtLeast(0) + 1) % ratings.size]) }) { Text("Nota mínima: " + if (draft.minRating == 0) "Todas" else draft.minRating.toString(), color = it) }
+            val providers = listOf("" to "Todas las fuentes") + com.shieldstream.tv.model.StreamingPlatforms.labels.entries.map { it.key to it.value }
+            val pi = providers.indexOfFirst { it.first == draft.platform }.coerceAtLeast(0)
+            KeyButton(330.dp, { draft = draft.copy(platform = providers[(pi + 1) % providers.size].first) }) { Text("Plataforma: " + providers[pi].second, color = it) }
+            val years = listOf(0) + (2026 downTo 1950).toList()
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyButton(56.dp, { draft = draft.copy(year = if (draft.year == 0) 2026 else (draft.year - 1).coerceAtLeast(1950)) }) { Text("−", color = it) }
+                Text("Año: " + if (draft.year == 0) "Todos" else draft.year.toString(), color = Color.White, modifier = Modifier.padding(10.dp))
+                KeyButton(56.dp, { draft = draft.copy(year = if (draft.year >= 2026) 0 else if (draft.year == 0) 1950 else draft.year + 1) }) { Text("+", color = it) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                KeyButton(130.dp, { draft = com.shieldstream.tv.domain.CatalogSearchFilters() }) { Text("Limpiar", color = it) }
+                KeyButton(130.dp, { onApply(draft) }) { Text("Aplicar", color = it) }
+                KeyButton(130.dp, onClose) { Text("Cancelar", color = it) }
+            }
+        }
     }
 }
