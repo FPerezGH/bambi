@@ -131,6 +131,13 @@ interface TmdbApi {
         @Query("query") query: String,
     ): TmdbSearchResponse
 
+    @GET("3/search/multi")
+    suspend fun searchPage(
+        @Query("api_key") key: String,
+        @Query("query") query: String,
+        @Query("page") page: Int,
+    ): TmdbSearchResponse
+
     @GET("3/movie/{id}")
     suspend fun movieDetails(
         @Path("id") id: Int,
