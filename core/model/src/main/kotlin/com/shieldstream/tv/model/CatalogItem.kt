@@ -12,6 +12,7 @@ data class CatalogItem(
     val rating: Float?,
     val genres: List<String> = emptyList(),
     val voteCount: Int = 0,
+    val popularity: Double = 0.0,
 ) {
     // Bayesian shrinkage: low vote counts stay close to the reference mean.
     val weightedRating: Double get() {
@@ -19,6 +20,8 @@ data class CatalogItem(
         val prior = if (type == MediaType.MOVIE) 500.0 else 200.0
         return ((rating ?: 0f) * votes + 6.5 * prior) / (votes + prior)
     }
+    val popularityScore: Double get() = (10.0 * kotlin.math.ln(1.0 + popularity.coerceAtLeast(0.0)) / kotlin.math.ln(101.0)).coerceIn(0.0, 10.0)
+    val recommendationScore: Double get() = 0.85 * weightedRating + 0.15 * popularityScore
     val key: String get() = "${type.name}_$id"
 }
 
