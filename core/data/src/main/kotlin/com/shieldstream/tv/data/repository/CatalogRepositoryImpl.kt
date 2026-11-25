@@ -251,11 +251,17 @@ class CatalogRepositoryImpl @Inject constructor(
         if (kids) kidsMovies(mapOf()).take(20)
         else tmdb.trendingAll(key).results.mapNotNull { it.toCatalogItemOrNull() }.filter { it.posterUrl != null }
 
-    override suspend fun search(query: String): List<CatalogItem> =
-        tmdb.search(key, query).results
+    override suspend fun search(query: String): List<CatalogItem> {
+        // Keep the original parental-control pathway unchanged.
+        if (!kids) {
+            val advanced = cinefranSearch(query)
+            if (advanced != null) return advanced
+        }
+        return tmdb.search(key, query).results
             .filter { !kids || it.genre_ids.any { g -> g in KIDS_GENRES } }
             .mapNotNull { it.toCatalogItemOrNull() } // descarta personas
             .filter { it.posterUrl != null }
+    }
 
     override suspend fun searchOutsideKids(query: String): List<CatalogItem> {
         if (!kids) return emptyList()
@@ -263,6 +269,61 @@ class CatalogRepositoryImpl @Inject constructor(
             .filter { it.genre_ids.none { g -> g in KIDS_GENRES } }
             .mapNotNull { it.toCatalogItemOrNull() }
             .filter { it.posterUrl != null }
+    }
+
+
+    /** Structured Spanish queries; ordinary title searches keep the original behavior. */
+    private suspend fun cinefranSearch(query: String): List<CatalogItem>? {
+        val q = java.text.Normalizer.normalize(query.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+        val series = Regex("\\bseries?\\b").containsMatchIn(q)
+        val genres = mapOf("comedia" to 35, "accion" to 28, "terror" to 27, "drama" to 18,
+            "ciencia ficcion" to 878, "thriller" to 53, "aventura" to 12, "animacion" to 16,
+            "romance" to 10749, "documental" to 99, "policiac" to 80)
+        val genre = genres.entries.firstOrNull { q.contains(it.key) }?.value
+        val rating = Regex("(?:nota|valoracion|tmdb|puntuacion)\\s*(?:tmdb\\s*)?(?:mayor a|mayor de|superior a|desde|>=|>)?\\s*(\\d+(?:[.,]\\d+)?)")
+            .find(q)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
+        val vampire = q.contains("vampir")
+        val decade = Regex("anos\\s+(\\d{2}|\\d{4})\\b").find(q)?.groupValues?.get(1)?.toIntOrNull()
+        if (genre == null && rating == null && !vampire && decade == null) return null
+        val params = mutableMapOf("include_adult" to "false", "sort_by" to "vote_average.desc",
+            "vote_count.gte" to if (series) "100" else "300", "language" to "es-ES")
+        val tvGenre = when (genre) { 28, 12 -> 10759; 878 -> 10765; 27, 53, 10749 -> null; else -> genre }
+        (if (series) tvGenre else genre)?.let { params["with_genres"] = it.toString() }
+        rating?.let { params["vote_average.gte"] = it.toString() }
+        decade?.let {
+            val year = if (it < 100) 1900 + it else it
+            val field = if (series) "first_air_date" else "primary_release_date"
+            params["$field.gte"] = "$year-01-01"
+            params["$field.lte"] = "${year + 9}-12-31"
+        }
+        if (vampire) {
+            val keyword = tmdb.searchKeyword(key, "vampire").results.firstOrNull { it.name.equals("vampire", true) }
+                ?: return emptyList()
+            params["with_keywords"] = keyword.id.toString()
+        }
+        data class Ranked(val item: CatalogItem, val rating: Double, val votes: Int)
+        val all = mutableListOf<Ranked>()
+        var page = 1
+        var total: Int
+        do {
+            val p = params + ("page" to page.toString())
+            if (series) {
+                val result = tmdb.discoverTvQuery(key, p)
+                total = result.total_pages
+                all += result.results.map { Ranked(it.toCatalogItem(), it.vote_average, it.vote_count) }
+            } else {
+                val result = tmdb.discoverMovieQuery(key, p)
+                total = result.total_pages
+                all += result.results.map { Ranked(it.toCatalogItem(), it.vote_average, it.vote_count) }
+            }
+            page++
+        } while (page <= total.coerceAtMost(500))
+        val m = if (series) 100.0 else 300.0
+        return all.filter { it.item.posterUrl != null }.distinctBy { it.item.key }
+            .sortedWith(compareByDescending<Ranked> { (it.votes * it.rating + m * 6.5) / (it.votes + m) }
+                .thenByDescending { it.votes }.thenBy { it.item.key })
+            .map { it.item }
     }
 
     private suspend fun kidsMovies(extra: Map<String, String>, genres: String = "16|10751"): List<CatalogItem> =
