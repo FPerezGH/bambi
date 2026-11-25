@@ -19,6 +19,7 @@ data class TmdbMovieDto(
     val release_date: String? = null,
     val vote_average: Double = 0.0,
     val vote_count: Int = 0,
+    val popularity: Double = 0.0,
 )
 
 @Serializable
@@ -31,6 +32,7 @@ data class TmdbTvDto(
     val first_air_date: String? = null,
     val vote_average: Double = 0.0,
     val vote_count: Int = 0,
+    val popularity: Double = 0.0,
 )
 
 @Serializable
