@@ -209,7 +209,7 @@ class CatalogRepositoryImpl @Inject constructor(
             .filter { it.items.isNotEmpty() }
     }
 
-    private fun rowsFor(filter: HomeFilter): List<RowSpec> = when (filter) {
+    private fun rowsFor(filter: HomeFilter): List<RowSpec> = listOf(RowSpec("cinefran_recent", "Novedades") { page -> cinefranRecent(filter, page) }) + when (filter) {
         HomeFilter.ALL -> listOf(
             RowSpec("top10_movies", texts.get(StringsR.string.data_top_10_movies_week), RowStyle.TOP10) { page -> tmdb.trendingMovies(key, page = page).results.map { it.toCatalogItem() } },
             RowSpec("popular_movies", texts.get(StringsR.string.data_popular_movies)) { page -> tmdb.popularMovies(key, page = page).results.map { it.toCatalogItem() } },
@@ -368,8 +368,55 @@ class CatalogRepositoryImpl @Inject constructor(
         }
     }
 
+
+    private fun isCinefranProvider(name: String): Boolean {
+        val n = name.lowercase(java.util.Locale.ROOT)
+        return n == "netflix" || n == "amazon prime video" || n == "prime video" ||
+            n == "hbo max" || n == "max" || n.startsWith("movistar plus") || n == "vodafone tv"
+    }
+
+    private suspend fun officialProviders(item: CatalogItem): List<com.shieldstream.tv.model.OfficialProvider> {
+        val id = item.id.toIntOrNull() ?: return emptyList()
+        val type = if (item.type == MediaType.TV) "tv" else "movie"
+        val region = try { tmdb.watchProviders(type, id, key).results["ES"] }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { return emptyList() }
+        return region?.flatrate.orEmpty().filter { isCinefranProvider(it.provider_name) }
+            .distinctBy { it.provider_id }.map {
+                com.shieldstream.tv.model.OfficialProvider(it.provider_id, it.provider_name,
+                    it.logo_path?.let { path -> "https://image.tmdb.org/t/p/w185$path" }, region?.link)
+            }
+    }
+
+    // TMDB has release dates, not the date a title joined a service.
+    private suspend fun cinefranRecent(filter: HomeFilter, page: Int): List<CatalogItem> = coroutineScope {
+        val types = when (filter) {
+            HomeFilter.ALL -> listOf("movie", "tv")
+            HomeFilter.MOVIES -> listOf("movie")
+            HomeFilter.TV -> listOf("tv")
+        }
+        types.map { type -> async {
+            val ids = tmdb.providerList(type, key).results.filter { isCinefranProvider(it.provider_name) }
+                .map { it.provider_id }.distinct()
+            if (ids.isEmpty()) return@async emptyList<CatalogItem>()
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            val calendar = java.util.Calendar.getInstance()
+            val today = fmt.format(calendar.time)
+            calendar.add(java.util.Calendar.DAY_OF_YEAR, -90)
+            val from = fmt.format(calendar.time)
+            val field = if (type == "tv") "first_air_date" else "primary_release_date"
+            val p = mapOf("watch_region" to "ES", "with_watch_providers" to ids.joinToString("|"),
+                "with_watch_monetization_types" to "flatrate", "include_adult" to "false",
+                "$field.gte" to from, "$field.lte" to today, "sort_by" to "$field.desc",
+                "page" to page.toString())
+            if (type == "tv") tmdb.discoverTvQuery(key, p).results.map { it.toCatalogItem() }
+            else tmdb.discoverMovieQuery(key, p).results.map { it.toCatalogItem() }
+        } }.awaitAll().flatten().distinctBy { it.key }
+    }
+
     override suspend fun getDetails(item: CatalogItem): CatalogDetails {
         val id = item.id.toIntOrNull() ?: return CatalogDetails(item)
+        val providers = officialProviders(item)
         return if (item.type == MediaType.TV) {
             val d = tmdb.tvDetails(id, key, append = "images,external_ids,translations,aggregate_credits,videos")
             CatalogDetails(
@@ -378,6 +425,7 @@ class CatalogRepositoryImpl @Inject constructor(
                     overview = d.overview.ifBlank { item.overview },
                     backdropUrl = d.backdrop_path?.let { backdrop(it) } ?: item.backdropUrl,
                 ),
+                officialProviders = providers,
                 logoUrl = pickLogo(d.images),
                 originalTitle = englishTitle(d.translations) ?: d.original_name,
                 runtimeMinutes = d.episode_run_time.firstOrNull(),
@@ -401,6 +449,7 @@ class CatalogRepositoryImpl @Inject constructor(
                     overview = d.overview.ifBlank { item.overview },
                     backdropUrl = d.backdrop_path?.let { backdrop(it) } ?: item.backdropUrl,
                 ),
+                officialProviders = providers,
                 logoUrl = pickLogo(d.images),
                 originalTitle = englishTitle(d.translations) ?: d.original_title,
                 runtimeMinutes = d.runtime?.takeIf { it > 0 },
