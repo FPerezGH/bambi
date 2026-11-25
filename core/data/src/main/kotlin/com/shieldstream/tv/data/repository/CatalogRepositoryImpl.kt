@@ -444,6 +444,28 @@ class CatalogRepositoryImpl @Inject constructor(
         } }.awaitAll().flatten().distinctBy { it.key }
     }
 
+    override suspend fun getSimilar(item: CatalogItem): List<CatalogItem> {
+        // Do not bypass the existing child-profile certification filters.
+        if (kids) return emptyList()
+        val id = item.id.toIntOrNull() ?: return emptyList()
+        val related = mutableListOf<CatalogItem>()
+        for (relation in listOf("recommendations", "similar")) {
+            for (page in 1..2) {
+                val result = try {
+                    if (item.type == MediaType.TV)
+                        tmdb.relatedTv(id, relation, key, page = page).results.map { it.toCatalogItem() }
+                    else tmdb.relatedMovies(id, relation, key, page = page).results.map { it.toCatalogItem() }
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { emptyList() }
+                related += result
+                if (related.filter { it.id != item.id && it.posterUrl != null }.distinctBy { it.key }.size >= 30) break
+                if (result.isEmpty()) break
+            }
+            if (related.filter { it.id != item.id && it.posterUrl != null }.distinctBy { it.key }.size >= 30) break
+        }
+        return related.filter { it.id != item.id && it.posterUrl != null }.distinctBy { it.key }.take(30)
+    }
+
     override suspend fun getDetails(item: CatalogItem): CatalogDetails {
         val id = item.id.toIntOrNull() ?: return CatalogDetails(item)
         val providers = officialProviders(item)
