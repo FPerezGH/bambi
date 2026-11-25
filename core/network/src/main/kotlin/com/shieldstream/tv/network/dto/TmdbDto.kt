@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class TmdbPaginated<T>(
     val page: Int = 1,
     val results: List<T> = emptyList(),
+    val total_pages: Int = 1,
 )
 
 @Serializable
@@ -17,6 +18,7 @@ data class TmdbMovieDto(
     val backdrop_path: String? = null,
     val release_date: String? = null,
     val vote_average: Double = 0.0,
+    val vote_count: Int = 0,
 )
 
 @Serializable
@@ -28,6 +30,7 @@ data class TmdbTvDto(
     val backdrop_path: String? = null,
     val first_air_date: String? = null,
     val vote_average: Double = 0.0,
+    val vote_count: Int = 0,
 )
 
 @Serializable
