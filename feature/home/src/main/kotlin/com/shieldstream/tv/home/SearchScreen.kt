@@ -147,7 +147,7 @@ fun SearchScreen(
     }
 
     Row(Modifier.fillMaxSize().background(Color.Black)) {
-        if (!carouselMode) Column(
+        if (!carouselMode || state !is SearchUiState.Results) Column(
             Modifier
                 .width(if (qwerty) 452.dp else 330.dp)
                 .fillMaxHeight()
