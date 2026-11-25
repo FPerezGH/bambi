@@ -63,6 +63,10 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch { settings.setSearchQwerty(!qwerty.value) }
     }
 
+    val pageSize: StateFlow<Int> = settings.homeRowItemLimit.stateIn(
+        viewModelScope, SharingStarted.Eagerly, SettingsRepository.DEFAULT_HOME_ROW_ITEM_LIMIT,
+    )
+
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -113,7 +117,10 @@ class SearchViewModel @Inject constructor(
                         SearchUiState.Results(q, items, locked, locked.filter(requests::isPending).map { it.key }.toSet())
                     }
                 }
-                .onFailure { e -> _uiState.value = SearchUiState.Error(e.message ?: texts.get(StringsR.string.home_search_error)) }
+                .onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    _uiState.value = SearchUiState.Error(e.message ?: texts.get(StringsR.string.home_search_error))
+                }
         }
     }
 }
