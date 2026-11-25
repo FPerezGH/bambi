@@ -202,7 +202,7 @@ function onYouTubeIframeAPIReady(){
   player = new YT.Player('p', {
     videoId: '$safeKey',
     playerVars: {autoplay:1, controls:1, rel:0, modestbranding:1, playsinline:1, fs:0, iv_load_policy:3,
-                 hl:'$lang', cc_lang_pref:'$lang', origin:'$ORIGIN'},
+                 hl:'$lang', cc_lang_pref:'es', cc_load_policy:1, origin:'$ORIGIN'},
     events: {
       onReady: function(e){ Bambi.state('listo'); e.target.playVideo(); },
       onStateChange: function(e){ Bambi.state(String(e.data)); if (e.data === 1) Bambi.ready(); if (e.data === 0) Bambi.ended(); },
