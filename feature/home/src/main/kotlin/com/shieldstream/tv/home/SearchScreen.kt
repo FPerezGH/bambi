@@ -82,6 +82,8 @@ fun SearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
+    var orderMode by rememberSaveable { mutableStateOf("original") }
+    var orderYear by rememberSaveable { mutableStateOf(0) }
     var lockedPick by remember { mutableStateOf<CatalogItem?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -215,19 +217,30 @@ fun SearchScreen(
                 is SearchUiState.Empty -> localizedStringResource(StringsR.string.home_no_results_for, s.query)
                 is SearchUiState.Error -> s.message
             }
-            Text(
-                text = header,
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
-            )
-            val items = when (val s = state) {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = header,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f),
+                )
+                CatalogOrderControl(orderMode, orderYear, { orderMode = it }, { orderYear = it })
+            }
+            val originalItems = when (val s = state) {
                 is SearchUiState.Suggestions -> s.items
                 is SearchUiState.Results -> s.items
                 else -> emptyList()
             }
+            val items = remember(originalItems, orderMode, orderYear) {
+                orderCatalogItems(originalItems, orderMode, orderYear)
+            }
+            if (originalItems.isNotEmpty() && items.isEmpty()) {
+                Text("No hay títulos para el año seleccionado", color = Color.White,
+                    modifier = Modifier.padding(12.dp))
+            }
             val results = state as? SearchUiState.Results
-            val locked = results?.locked.orEmpty()
+            val locked = orderCatalogItems(results?.locked.orEmpty(), orderMode, orderYear)
             val pending = results?.pending.orEmpty()
             notice?.let { message ->
                 Text(
