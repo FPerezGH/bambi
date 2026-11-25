@@ -18,6 +18,8 @@ data class Profile(
     val theme: ProfileTheme = ProfileTheme.BAMBI,
     /** Icono de perfil (URL de imagen). Sin él, la inicial sobre el color de [avatar]. */
     val avatarImage: String? = null,
+    val categoryOrder: List<String> = emptyList(),
+    val hiddenHomeRows: Set<String> = emptySet(),
 ) {
     val initial: String get() = name.trim().firstOrNull()?.uppercase() ?: "?"
 
