@@ -85,7 +85,7 @@ fun SearchScreen(
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val configuredPageSize by viewModel.pageSize.collectAsStateWithLifecycle()
     var orderMode by rememberSaveable { mutableStateOf("recommended") }
-    var carouselMode by rememberSaveable { mutableStateOf(false) }
+    var carouselMode by rememberSaveable { mutableStateOf(true) }
     var orderYear by rememberSaveable { mutableStateOf(0) }
     var page by rememberSaveable(query, orderMode, orderYear, configuredPageSize) { mutableStateOf(0) }
     var lockedPick by remember { mutableStateOf<CatalogItem?>(null) }
