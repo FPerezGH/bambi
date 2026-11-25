@@ -132,9 +132,12 @@ internal fun orderCatalogItems(items: List<CatalogItem>, mode: String, year: Int
     val filtered = if (year == 0) items else items.filter { it.year == year }
     val current = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     return when (mode) {
+        "recommended" -> filtered.sortedWith(compareByDescending<CatalogItem> { it.recommendationScore }.thenByDescending { it.voteCount })
+        "popular" -> filtered.sortedByDescending { it.popularity }
+        "votes" -> filtered.sortedByDescending { it.voteCount }
         "rating" -> filtered.sortedWith(compareByDescending<CatalogItem> { it.weightedRating }.thenByDescending { it.voteCount }.thenByDescending { it.year ?: 0 })
         "recent_best" -> filtered.sortedWith(compareByDescending<CatalogItem> {
-            it.weightedRating - ((current - (it.year ?: 1900)).coerceAtLeast(0) * 0.12)
+            0.70 * it.weightedRating + 0.15 * it.popularityScore + 0.15 * (10.0 - (current - (it.year ?: 1900)).coerceAtLeast(0)).coerceIn(0.0, 10.0)
         }.thenByDescending { it.voteCount })
         "newest" -> filtered.sortedByDescending { it.year ?: 0 }
         "oldest" -> filtered.sortedBy { it.year ?: Int.MAX_VALUE }
@@ -152,7 +155,7 @@ internal fun CatalogOrderControl(
     var decade by remember { mutableStateOf<Int?>(null) }
     var chooseYear by remember { mutableStateOf(false) }
     val current = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-    val options = listOf("original" to "Orden original", "rating" to "Valoración ponderada TMDB",
+    val options = listOf("recommended" to "Recomendados", "rating" to "Valoración ponderada TMDB", "popular" to "Más populares TMDB", "votes" to "Más votadas", "original" to "Orden original",
         "recent_best" to "Mejores recientes", "newest" to "Más recientes", "oldest" to "Más antiguas")
     val requester = remember { FocusRequester() }
     fun close() { menu = false; chooseYear = false; decade = null; runCatching { requester.requestFocus() } }
