@@ -130,11 +130,11 @@ class MainActivity : ComponentActivity() {
             // Con "Intro siempre" sale además cada vez que se vuelve (salvo vueltas de un instante).
             val reload = away >= RELOAD_AFTER_MS
             if (reload || (settings.introAlwaysEnabled && away >= ALWAYS_MIN_AWAY_MS)) {
-                resumeIntro.value = ResumeIntro(reload = reload, at = SystemClock.elapsedRealtime())
+                // CINEFRAN: no mostrar animacion al regresar.
             }
         }
         watchNext.onForeground()
         trakt.syncActive()
-        updates.check(manual = false)
+        // Actualizaciones independientes: no consultar Bambi.
     }
 }
