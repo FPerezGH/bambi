@@ -235,18 +235,23 @@ fun SearchScreen(
                 is SearchUiState.Results -> s.items
                 else -> emptyList()
             }
-            val allItems = remember(originalItems, orderMode, orderYear) {
+            val sortedItems = remember(originalItems, orderMode, orderYear) {
                 orderCatalogItems(originalItems, orderMode, orderYear)
             }
+            val allItems = sortedItems.take(500)
             if (originalItems.isNotEmpty() && allItems.isEmpty()) {
                 Text("No hay títulos para el año seleccionado", color = Color.White,
                     modifier = Modifier.padding(12.dp))
             }
             val results = state as? SearchUiState.Results
-            val allLocked = orderCatalogItems(results?.locked.orEmpty(), orderMode, orderYear)
+            val sortedLocked = orderCatalogItems(results?.locked.orEmpty(), orderMode, orderYear)
+            val allLocked = sortedLocked.take((500 - allItems.size).coerceAtLeast(0))
             val pending = results?.pending.orEmpty()
             val pageSize = configuredPageSize.coerceIn(10, 100)
             val total = allItems.size + allLocked.size
+            if (sortedItems.size + sortedLocked.size > 500) {
+                Text("Mostrando los primeros 500 resultados según el orden seleccionado", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp))
+            }
             val pages = ((total + pageSize - 1) / pageSize).coerceAtLeast(1)
             val currentPage = page.coerceIn(0, pages - 1)
             val start = currentPage * pageSize
