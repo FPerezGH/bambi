@@ -32,6 +32,8 @@ interface CatalogRepository {
      */
     suspend fun searchOutsideKids(query: String): List<CatalogItem> = emptyList()
 
+    suspend fun getSimilar(item: CatalogItem): List<CatalogItem> = emptyList()
+
     suspend fun getDetails(item: CatalogItem): CatalogDetails
 
     suspend fun getItem(type: MediaType, id: String): CatalogItem?
