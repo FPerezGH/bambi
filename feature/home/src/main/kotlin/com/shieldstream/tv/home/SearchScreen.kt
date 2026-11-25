@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -82,8 +83,10 @@ fun SearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
+    val configuredPageSize by viewModel.pageSize.collectAsStateWithLifecycle()
     var orderMode by rememberSaveable { mutableStateOf("original") }
     var orderYear by rememberSaveable { mutableStateOf(0) }
+    var page by rememberSaveable(query, orderMode, orderYear, configuredPageSize) { mutableStateOf(0) }
     var lockedPick by remember { mutableStateOf<CatalogItem?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -232,16 +235,47 @@ fun SearchScreen(
                 is SearchUiState.Results -> s.items
                 else -> emptyList()
             }
-            val items = remember(originalItems, orderMode, orderYear) {
+            val allItems = remember(originalItems, orderMode, orderYear) {
                 orderCatalogItems(originalItems, orderMode, orderYear)
             }
-            if (originalItems.isNotEmpty() && items.isEmpty()) {
+            if (originalItems.isNotEmpty() && allItems.isEmpty()) {
                 Text("No hay títulos para el año seleccionado", color = Color.White,
                     modifier = Modifier.padding(12.dp))
             }
             val results = state as? SearchUiState.Results
-            val locked = orderCatalogItems(results?.locked.orEmpty(), orderMode, orderYear)
+            val allLocked = orderCatalogItems(results?.locked.orEmpty(), orderMode, orderYear)
             val pending = results?.pending.orEmpty()
+            val pageSize = configuredPageSize.coerceIn(10, 100)
+            val total = allItems.size + allLocked.size
+            val pages = ((total + pageSize - 1) / pageSize).coerceAtLeast(1)
+            val currentPage = page.coerceIn(0, pages - 1)
+            val start = currentPage * pageSize
+            val end = (start + pageSize).coerceAtMost(total)
+            val items = allItems.drop(start).take(pageSize)
+            val locked = allLocked.drop((start - allItems.size).coerceAtLeast(0))
+                .take((end - maxOf(start, allItems.size)).coerceAtLeast(0))
+            val gridState = rememberLazyGridState()
+            fun changePage(next: Int) {
+                page = next.coerceIn(0, pages - 1)
+                lastCardKey = null
+            }
+            LaunchedEffect(currentPage) {
+                gridState.scrollToItem(0)
+            }
+            if (pages > 1) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (currentPage > 0) KeyButton(width = 136.dp, onClick = { changePage(currentPage - 1) }) {
+                        Text("‹ Anterior", color = it)
+                    }
+                    Text("Página ${currentPage + 1}/$pages · ${start + 1}–$end de $total",
+                        color = Color.White, style = MaterialTheme.typography.bodySmall)
+                    if (currentPage < pages - 1) KeyButton(width = 136.dp, onClick = { changePage(currentPage + 1) }) {
+                        Text("Siguiente ›", color = it)
+                    }
+                }
+            }
             notice?.let { message ->
                 Text(
                     text = message,
@@ -255,6 +289,7 @@ fun SearchScreen(
                 )
             }
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Adaptive(118.dp),
                 contentPadding = PaddingValues(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
