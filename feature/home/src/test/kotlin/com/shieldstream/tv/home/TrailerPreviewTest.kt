@@ -18,7 +18,7 @@ class TrailerPreviewTest {
     fun `embed autoplays muted without controls and loops the same video`() {
         assertEquals(
             "https://www.youtube-nocookie.com/embed/abc123?autoplay=1&mute=1&controls=0&modestbranding=1" +
-                "&rel=0&iv_load_policy=3&playsinline=1&loop=1&playlist=abc123&disablekb=1&fs=0&cc_load_policy=0",
+                "&rel=0&iv_load_policy=3&playsinline=1&loop=1&playlist=abc123&disablekb=1&fs=0&cc_load_policy=1&cc_lang_pref=es&hl=es",
             embedUrl("abc123"),
         )
     }
@@ -31,7 +31,8 @@ class TrailerPreviewTest {
         assertTrue(url.contains("controls=0"))
         // Sin `enablejsapi` no hace falta cargar la API de IFrame: solo se lee el <video> por JS.
         assertFalse(url.contains("enablejsapi"))
-        assertFalse(url.contains("cc_load_policy=1"))
+        assertTrue(url.contains("cc_load_policy=1"))
+        assertTrue(url.contains("cc_lang_pref=es"))
     }
 
     @Test
@@ -74,7 +75,7 @@ class TrailerPreviewTest {
         // Solo letras, números, `-` y `_`: un `&` en la clave no puede añadir parámetros.
         assertEquals(
             "https://www.youtube-nocookie.com/embed/abcdefg?autoplay=1&mute=1&controls=0&modestbranding=1" +
-                "&rel=0&iv_load_policy=3&playsinline=1&loop=1&playlist=abcdefg&disablekb=1&fs=0&cc_load_policy=0",
+                "&rel=0&iv_load_policy=3&playsinline=1&loop=1&playlist=abcdefg&disablekb=1&fs=0&cc_load_policy=1&cc_lang_pref=es&hl=es",
             url,
         )
         assertFalse(url.contains("&c?"))
