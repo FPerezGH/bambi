@@ -292,20 +292,21 @@ class CatalogRepositoryImpl @Inject constructor(
         val genre = genres.entries.firstOrNull { q.contains(it.key) }?.value
         val rating = Regex("(?:nota|valoracion|tmdb|puntuacion)\\s*(?:tmdb\\s*)?(?:mayor a|mayor de|superior a|desde|>=|>)?\\s*(\\d+(?:[.,]\\d+)?)")
             .find(q)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
-        val vampire = q.contains("vampir")
+        val vampire = Regex("\\b(vampiros?|vampiras?|vampirismo)\\b").containsMatchIn(q) && (q.split(Regex("\\s+")).size == 1 || Regex("\\b(peliculas?|series?|sobre|de|con)\\b").containsMatchIn(q))
         val decade = Regex("anos\\s+(\\d{2}|\\d{4})\\b").find(q)?.groupValues?.get(1)?.toIntOrNull()
         val providerNames = listOf("netflix", "prime video", "hbo max", "movistar", "vodafone")
             .filter { q.contains(it) }
         val duration = Regex("menos de (\\d+) minutos").find(q)?.groupValues?.get(1)?.toIntOrNull()
         val spanish = Regex("\\b(espanolas?|espanoles?)\\b").containsMatchIn(q)
         val structured = Regex("\\b(peliculas?|series?|mejores|comedias?|dramas?|thrillers?)\\b").containsMatchIn(q)
-        if (!structured && rating == null && duration == null) return null
+        if (!structured && rating == null && duration == null && !vampire && genre == null) return null
         if (genre == null && rating == null && !vampire && decade == null && providerNames.isEmpty() && duration == null && !spanish) return null
         val params = mutableMapOf("include_adult" to "false", "sort_by" to "vote_average.desc",
             "vote_count.gte" to if (series) "100" else "300", "language" to "es-ES")
         val tvGenre = when (genre) { 28, 12 -> 10759; 878 -> 10765; 27, 53, 10749 -> null; else -> genre }
         (if (series) tvGenre else genre)?.let { params["with_genres"] = it.toString() }
         rating?.let { params["vote_average.gte"] = it.toString() }
+        if (!series) params["with_runtime.gte"] = "60"
         duration?.let { params["with_runtime.lte"] = (it - 1).coerceAtLeast(0).toString() }
         if (spanish) params["with_original_language"] = "es"
         if (providerNames.isNotEmpty()) {
@@ -326,9 +327,11 @@ class CatalogRepositoryImpl @Inject constructor(
             params["$field.lte"] = "${year + 9}-12-31"
         }
         if (vampire) {
-            val keyword = tmdb.searchKeyword(key, "vampire").results.firstOrNull { it.name.equals("vampire", true) }
-                ?: return emptyList()
-            params["with_keywords"] = keyword.id.toString()
+            val keywords = listOf("vampire", "vampires", "vampirism").flatMap { term ->
+                tmdb.searchKeyword(key, term).results.filter { it.name.equals(term, true) }
+            }.map { it.id }.distinct()
+            if (keywords.isEmpty()) return emptyList()
+            params["with_keywords"] = keywords.joinToString("|")
         }
         data class Ranked(val item: CatalogItem, val rating: Double, val votes: Int)
         val all = mutableListOf<Ranked>()
@@ -347,9 +350,8 @@ class CatalogRepositoryImpl @Inject constructor(
             }
             page++
         } while (page <= total.coerceAtMost(500))
-        val m = if (series) 100.0 else 300.0
         return all.filter { it.item.posterUrl != null }.distinctBy { it.item.key }
-            .sortedWith(compareByDescending<Ranked> { (it.votes * it.rating + m * 6.5) / (it.votes + m) }
+            .sortedWith(compareByDescending<Ranked> { it.item.weightedRating }
                 .thenByDescending { it.votes }.thenBy { it.item.key })
             .map { it.item }
     }
