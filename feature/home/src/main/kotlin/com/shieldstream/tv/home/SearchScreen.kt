@@ -84,7 +84,7 @@ fun SearchScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val configuredPageSize by viewModel.pageSize.collectAsStateWithLifecycle()
-    var orderMode by rememberSaveable { mutableStateOf("rating") }
+    var orderMode by rememberSaveable { mutableStateOf("recommended") }
     var carouselMode by rememberSaveable { mutableStateOf(false) }
     var orderYear by rememberSaveable { mutableStateOf(0) }
     var page by rememberSaveable(query, orderMode, orderYear, configuredPageSize) { mutableStateOf(0) }
