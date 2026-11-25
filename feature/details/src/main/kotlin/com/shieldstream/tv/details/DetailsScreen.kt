@@ -170,6 +170,52 @@ private fun DetailsContent(
         }
     }
     var actionsOpen by remember { mutableStateOf(false) }
+    var similarOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val similarRequester = remember { FocusRequester() }
+    var restoreSimilarFocus by remember { mutableStateOf(false) }
+    var similarItems by remember(state.details.item.key) { mutableStateOf<List<com.shieldstream.tv.model.CatalogItem>?>(null) }
+    LaunchedEffect(similarOpen, state.details.item.key) {
+        if (similarOpen && similarItems == null) similarItems = viewModel.similarTitles(state.details.item)
+    }
+    LaunchedEffect(similarOpen) {
+        if (!similarOpen && restoreSimilarFocus) {
+            withFrameNanos { }
+            runCatching { similarRequester.requestFocus() }
+            restoreSimilarFocus = false
+        }
+    }
+    if (similarOpen) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { similarOpen = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            val closeRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) {
+                withFrameNanos { }
+                runCatching { closeRequester.requestFocus() }
+            }
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                AsyncImage(model = state.details.item.backdropUrl, contentDescription = null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.80f)).padding(top = 32.dp)) {
+                    SectionTitle("Similares a " + state.details.item.title)
+                    Text(state.details.item.overview, color = Color.White, maxLines = 3,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 56.dp, vertical = 16.dp))
+                    TvButton(text = "Volver", onClick = { similarOpen = false },
+                        modifier = Modifier.padding(start = 56.dp).focusRequester(closeRequester))
+                    val results = similarItems
+                    when {
+                        results == null -> CircularProgressIndicator(modifier = Modifier.padding(56.dp))
+                        results.isEmpty() -> SectionTitle("No hay títulos similares disponibles")
+                        else -> PosterStrip(items = results, onItem = { selected ->
+                            similarOpen = false
+                            onOpenItem(selected)
+                        })
+                    }
+                }
+            }
+        }
+    }
     var ratingTarget by remember { mutableStateOf<TraktRatingTarget?>(null) }
     var episodeMenu by remember { mutableStateOf<Episode?>(null) }
     BackHandler(enabled = actionsOpen || episodeMenu != null || !panelOpen) {
@@ -241,6 +287,8 @@ private fun DetailsContent(
                     panelOpen = true
                 },
                 onOpenActions = { actionsOpen = true },
+                onSimilar = { restoreSimilarFocus = true; similarOpen = true },
+                similarRequester = similarRequester,
                 onTrailer = state.details.trailerKey?.let { first -> { onOpenTrailer(state.details.trailerKeys.ifEmpty { listOf(first) }) } },
                 // Al volver a los botones desde abajo, la página sube del todo: si no, la sinopsis quedaba cortada.
                 modifier = Modifier
@@ -431,6 +479,8 @@ private fun InfoBlock(
     onOpenSources: () -> Unit,
     onOpenActions: () -> Unit,
     onTrailer: (() -> Unit)?,
+    onSimilar: () -> Unit,
+    similarRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val item = details.item
@@ -539,6 +589,8 @@ private fun InfoBlock(
                     enabled = interactive,
                 )
             }
+            TvButton(text = "Similares", onClick = onSimilar, enabled = interactive,
+                modifier = Modifier.focusRequester(similarRequester))
             if (detailsMoreVisible(state.pendingPlay)) {
                 TvButton(
                     text = localizedStringResource(StringsR.string.details_more),
