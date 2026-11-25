@@ -240,6 +240,7 @@ data class TmdbVideoDto(
     val official: Boolean = false,
     val iso_639_1: String? = null,
     val name: String = "",
+    val iso_3166_1: String? = null,
 )
 
 @Serializable
