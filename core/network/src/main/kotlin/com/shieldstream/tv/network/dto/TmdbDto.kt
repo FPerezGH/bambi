@@ -36,6 +36,7 @@ data class TmdbTvDto(
 @Serializable
 data class TmdbSearchResponse(
     val results: List<TmdbSearchResultDto> = emptyList(),
+    val total_pages: Int = 1,
 )
 
 @Serializable
