@@ -311,6 +311,8 @@ fun ProfileEditScreen(
     if (choosingCategories) {
         HomeCategoriesDialog(
             hidden = profile.hiddenCategories,
+            order = profile.categoryOrder,
+            onMove = viewModel::moveCategory,
             onToggle = viewModel::toggleCategory,
             onShowAll = viewModel::showAllCategories,
             onClose = { choosingCategories = false },
