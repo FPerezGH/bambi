@@ -366,6 +366,7 @@ private fun SettingsList(
             }
             item { SectionTitle(localizedStringResource(StringsR.string.settings_about)) }
             item { AboutCard() }
+            item { PortableBackupCard() }
             if (showRequests) {
                 item { FamilyRequestsCard(count = pendingRequestCount, onClick = onOpenRequests) }
             }

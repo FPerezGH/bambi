@@ -39,6 +39,14 @@ class TokenStore @Inject constructor(
         memory[name] = value ?: NONE
     }
 
+    /** Synchronous write for authenticated portable backups; never exports raw encrypted prefs. */
+    fun restoreSecrets(values: Map<String, String?>) {
+        val editor = prefs.edit()
+        values.forEach { (name, value) -> if (value == null) editor.remove(name) else editor.putString(name, value) }
+        check(editor.commit()) { "Credential storage write failed" }
+        values.forEach { (name, value) -> memory[name] = value ?: NONE }
+    }
+
     fun seedOnce(name: String, value: String) {
         val flag = "seeded_$name"
         if (prefs.getBoolean(flag, false)) return

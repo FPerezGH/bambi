@@ -45,6 +45,8 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataModule {
+    @Binds @Singleton
+    abstract fun bindPortableBackup(impl: com.shieldstream.tv.data.security.PortableBackupImpl): com.shieldstream.tv.domain.PortableBackup
 
     @Binds
     @Singleton

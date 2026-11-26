@@ -52,7 +52,7 @@ class UpdateRepositoryImpl @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
 
-    private val _state = MutableStateFlow<UpdateState>(UpdateState.Unsupported)
+    private val _state = MutableStateFlow<UpdateState>(if (!version.isDebug && context.packageName == "com.cinefran.tv") UpdateState.Idle else UpdateState.Unsupported)
     override val state: StateFlow<UpdateState> = _state.asStateFlow()
 
     private val _promptDismissed = MutableStateFlow(false)
@@ -122,6 +122,7 @@ class UpdateRepositoryImpl @Inject constructor(
         job = scope.launch {
             runCatching {
                 val apk = download(update)
+                verifyUpdate(apk)
                 _state.value = UpdateState.Installing(update)
                 install(apk)
             }.onFailure {
@@ -156,12 +157,11 @@ class UpdateRepositoryImpl @Inject constructor(
         val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull ?: return null
         val assets = (release["assets"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
         val apk = assets.firstOrNull { it.string("name") == APK_NAME }
-            ?: assets.firstOrNull { it.string("name")?.endsWith(".apk", ignoreCase = true) == true }
             ?: return null
         return AppUpdate(
             version = tag.removePrefix("v"),
             notes = release["body"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-            apkUrl = apk.string("browser_download_url") ?: return null,
+            apkUrl = apk.string("browser_download_url")?.takeIf { it.startsWith("https://github.com/FPerezGH/bambi/releases/download/") } ?: return null,
             sizeBytes = apk["size"]?.jsonPrimitive?.longOrNull ?: 0L,
         )
     }
@@ -198,6 +198,18 @@ class UpdateRepositoryImpl @Inject constructor(
             }
         }
         return file
+    }
+
+    @Suppress("DEPRECATION")
+    private fun verifyUpdate(apk: File) {
+        val pm = context.packageManager
+        val flags = android.content.pm.PackageManager.GET_SIGNATURES
+        val current = pm.getPackageInfo(context.packageName, flags)
+        val incoming = pm.getPackageArchiveInfo(apk.absolutePath, flags) ?: error("APK inválido")
+        require(incoming.packageName == current.packageName && incoming.versionCode > current.versionCode) { "Paquete o versión incorrectos" }
+        val a = current.signatures.orEmpty().toSet()
+        val b = incoming.signatures.orEmpty().toSet()
+        require(a.isNotEmpty() && a == b) { "Firma de actualización incompatible" }
     }
 
     private fun install(apk: File, withProfile: Boolean = true) {
@@ -258,7 +270,7 @@ class UpdateRepositoryImpl @Inject constructor(
         private const val TAG = "Update"
         private const val KEY_LAST_CHECK = "last_check"
         private const val AUTO_CHECK_INTERVAL_MS = 6 * 3_600_000L
-        const val APK_NAME = "Bambi.apk"
+        const val APK_NAME = "CINEFRAN.apk"
 
         /** "1.0.10" > "1.0.9"; ignora sufijos ("-pruebas"). */
         fun isNewer(candidate: String, current: String): Boolean {

@@ -33,8 +33,8 @@ android {
         applicationId = "com.cinefran.tv"
         minSdk = 21
         targetSdk = 35
-        versionCode = 115
-        versionName = "0.3.5" // Includes all accumulated search, profile and platform corrections.
+        versionCode = 116
+        versionName = "0.3.6" // Includes all accumulated search, profile and platform corrections.
         manifestPlaceholders["appLabel"] = "@string/app_name"
 
         buildConfigField("String", "RD_TOKEN", "\"$rdToken\"")
@@ -71,12 +71,13 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-pruebas"
-            manifestPlaceholders["appLabel"] = "CINEFRAN Stremio 0.3.5"
+            manifestPlaceholders["appLabel"] = "CINEFRAN Stremio 0.3.6"
         }
         release {
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("release")
+            manifestPlaceholders["appLabel"] = "CINEFRAN"
         }
         // Release-like performance testing without touching the stable app or enabling self-updates.
         // Shares the debug package/data, but is non-debuggable so AGP packages the baseline profile.
