@@ -258,8 +258,8 @@ internal fun RowsBrowserContent(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .height(236.dp)
-                    .padding(start = ContentStart, top = 24.dp, end = 320.dp),
+                    .height(268.dp)
+                    .padding(start = ContentStart, top = 20.dp, end = 250.dp),
                 verticalArrangement = Arrangement.Bottom,
             ) {
                 header?.let {

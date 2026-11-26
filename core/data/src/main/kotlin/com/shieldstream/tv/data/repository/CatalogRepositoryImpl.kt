@@ -706,6 +706,61 @@ class CatalogRepositoryImpl @Inject constructor(
         return related.values.take(30)
     }
 
+    private data class CachedPreview(val at: Long, val data: com.shieldstream.tv.model.TitlePreview)
+    private val previewCache = ConcurrentHashMap<String, CachedPreview>()
+
+    override suspend fun getPreview(item: CatalogItem): com.shieldstream.tv.model.TitlePreview = coroutineScope {
+        val id = item.id.toIntOrNull() ?: return@coroutineScope com.shieldstream.tv.model.TitlePreview()
+        val cacheKey = "${item.key}_${Lang.current.name}"
+        previewCache[cacheKey]?.takeIf { System.currentTimeMillis() - it.at < 30 * 60_000L }?.let { return@coroutineScope it.data }
+        val availability = async {
+            try {
+                val type = if (item.type == MediaType.TV) "tv" else "movie"
+                val region = tmdb.watchProviders(type, id, key).results["ES"]
+                region?.flatrate.orEmpty().distinctBy { it.provider_id }.map {
+                    com.shieldstream.tv.model.OfficialProvider(it.provider_id, it.provider_name,
+                        it.logo_path?.let { path -> "https://image.tmdb.org/t/p/w185$path" }, region?.link)
+                } to true
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { emptyList<com.shieldstream.tv.model.OfficialProvider>() to false }
+        }
+        fun certification(value: String?): String? {
+            val c = value?.trim()?.uppercase(java.util.Locale.ROOT)?.takeIf { it.isNotBlank() } ?: return null
+            return when {
+                c in listOf("A", "TP", "APTA", "G", "TV-G", "TV-Y", "ALL") -> "TP"
+                c.all { it.isDigit() } -> "$c+"
+                c.matches(Regex("[0-9]+\\+")) -> c
+                else -> c
+            }
+        }
+        val data = try {
+            if (item.type == MediaType.TV) {
+                val d = tmdb.tvDetails(id, key, append = "content_ratings")
+                val kind = when (d.type?.lowercase(java.util.Locale.ROOT)) {
+                    "talk show", "reality", "news", "variety", "game show" -> "Programa de TV"
+                    else -> "Serie"
+                }
+                com.shieldstream.tv.model.TitlePreview(kind = kind, genres = d.genres.map { it.name },
+                    runtimeMinutes = d.episode_run_time.firstOrNull { it > 0 } ?: d.last_episode_to_air?.runtime?.takeIf { it > 0 },
+                    certification = certification(d.content_ratings?.results?.firstOrNull { it.iso_3166_1 == "ES" }?.rating))
+            } else {
+                val d = tmdb.movieDetails(id, key, append = "release_dates")
+                com.shieldstream.tv.model.TitlePreview(kind = "Película", genres = d.genres.map { it.name },
+                    runtimeMinutes = d.runtime?.takeIf { it > 0 },
+                    certification = certification(d.release_dates?.results?.firstOrNull { it.iso_3166_1 == "ES" }
+                        ?.release_dates?.firstOrNull { it.certification.isNotBlank() }?.certification))
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { com.shieldstream.tv.model.TitlePreview() }
+        val (providers, known) = availability.await()
+        val result = data.copy(providers = providers, availabilityKnown = known)
+        if (data.kind != null && known) {
+            if (previewCache.size >= 250) previewCache.clear()
+            previewCache[cacheKey] = CachedPreview(System.currentTimeMillis(), result)
+        }
+        result
+    }
+
     override suspend fun getDetails(item: CatalogItem): CatalogDetails {
         val id = item.id.toIntOrNull() ?: return CatalogDetails(item)
         val providerResult = try {

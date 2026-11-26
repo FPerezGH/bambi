@@ -228,10 +228,11 @@ private fun DetailsContent(
                             hero?.let {
                                 Text(it.title, color = Color.White, style = MaterialTheme.typography.titleLarge,
                                     modifier = Modifier.padding(start = 56.dp, top = 18.dp))
-                                Text(it.overview, color = Grey, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                com.shieldstream.tv.ui.component.TitlePreviewMetadata(it, modifier = Modifier.padding(horizontal = 56.dp))
+                                Text(it.overview, color = Grey, maxLines = 2, overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(horizontal = 56.dp, vertical = 8.dp))
                             }
-                            PosterStrip(items = results, firstRequester = firstPoster, onFocused = { selected = it },
+                            PosterStrip(items = results, firstRequester = firstPoster, showPreview = false, onFocused = { selected = it },
                                 onItem = { candidate -> similarOpen = false; onOpenItem(candidate) })
                         }
                     }
@@ -657,7 +658,7 @@ private fun MetaRow(details: CatalogDetails, state: DetailsUiState.Content) {
             )
             Spacer(Modifier.width(14.dp))
         }
-        TomatometerRating(item)
+        com.shieldstream.tv.ui.component.TomatometerRating(item)
         item.year?.let {
             Text(it.toString(), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.width(14.dp))

@@ -175,25 +175,21 @@ internal fun HeroInfo(item: CatalogItem) {
     Column {
         Text(
             text = item.title,
-            style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
             color = Color.White,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(8.dp))
-        Text(
-            text = metaLine(item),
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = Color(0xFF46D369),
-        )
+        com.shieldstream.tv.ui.component.TitlePreviewMetadata(item)
         Spacer(Modifier.height(8.dp))
         Text(
             text = item.overview,
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.85f),
-            maxLines = 3,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 520.dp),
+            modifier = Modifier.widthIn(max = 720.dp),
         )
     }
 }

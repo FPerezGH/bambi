@@ -180,7 +180,16 @@ internal fun PosterStrip(
     modifier: Modifier = Modifier,
     firstRequester: androidx.compose.ui.focus.FocusRequester? = null,
     onFocused: (CatalogItem) -> Unit = {},
+    showPreview: Boolean = true,
 ) {
+    var selected by remember(items) { mutableStateOf<CatalogItem?>(null) }
+    if (showPreview) selected?.let { title ->
+        Column(Modifier.padding(horizontal = 56.dp)) {
+            Text(title.title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+            com.shieldstream.tv.ui.component.TitlePreviewMetadata(title)
+            Text(title.overview, color = Color.White.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
     ProvidePivotScroll(leading = 56.dp) {
         LazyRow(
             modifier = modifier,
@@ -189,7 +198,7 @@ internal fun PosterStrip(
         ) {
             items(items, key = { it.key }) { item ->
                 Column {
-                    PosterCard(item = item, onClick = { onItem(item) }, onFocused = { onFocused(item) },
+                    PosterCard(item = item, onClick = { onItem(item) }, onFocused = { selected = item; onFocused(item) },
                         modifier = if (item.key == items.firstOrNull()?.key && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier)
                     if (item.id == highlightId) {
                         Spacer(Modifier.height(6.dp))

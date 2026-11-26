@@ -38,6 +38,8 @@ interface CatalogRepository {
 
     suspend fun getSimilar(item: CatalogItem): List<CatalogItem> = emptyList()
 
+    suspend fun getPreview(item: CatalogItem): com.shieldstream.tv.model.TitlePreview = com.shieldstream.tv.model.TitlePreview()
+
     suspend fun getDetails(item: CatalogItem): CatalogDetails
 
     suspend fun getItem(type: MediaType, id: String): CatalogItem?

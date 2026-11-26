@@ -246,41 +246,8 @@ private fun FeaturedSlide(featured: FeaturedItem, trailerKey: String?) {
 /** "Película • Drama • 2026 • 1 h 37 min  [16+]  ★ 8,6" */
 @Composable
 private fun MetaLine(featured: FeaturedItem) {
-    val item = featured.item
-    val text = listOfNotNull(
-        if (item.type == MediaType.TV) localizedStringResource(StringsR.string.home_series) else localizedStringResource(StringsR.string.home_movie),
-        featured.genre,
-        item.year?.toString(),
-        featured.durationText,
-    ).joinToString("  •  ")
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = text,
-            color = Color.White,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-        )
-        featured.certification?.let { cert ->
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = cert,
-                color = Color.White,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier
-                    .background(certificationColor(cert), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 1.dp),
-            )
-        }
-        item.rating?.takeIf { it > 0f }?.let { rating ->
-            Spacer(Modifier.width(12.dp))
-            Text("★", color = Color(0xFFFFC94A), style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = String.format(UiLocale, "%.1f", rating),
-                color = Color.White,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            )
-        }
-    }
+    com.shieldstream.tv.ui.component.TitlePreviewMetadata(featured.item,
+        fallbackGenre = featured.genre, fallbackDuration = featured.durationText, fallbackCertification = featured.certification)
 }
 
 /** Colores de la calificación por edades española: verde TP, amarillo 7/12/13, naranja 16, rojo 18. */

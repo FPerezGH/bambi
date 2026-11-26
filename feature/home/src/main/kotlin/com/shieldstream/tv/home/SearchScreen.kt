@@ -501,13 +501,11 @@ private fun SearchFiltersDialog(
                 KeyButton(150.dp, { draft = draft.copy(series = true, all = false) }) { Text(if (draft.series) "✓ Series" else "Series", color = it) }
             }
             val genres = listOf("" to "Todos", "comedia" to "Comedia", "accion" to "Acción", "drama" to "Drama", "ciencia ficcion" to "Ciencia ficción", "terror" to "Terror", "animacion" to "Animación", "documental" to "Documental", "aventura" to "Aventura", "crimen" to "Crimen", "fantasia" to "Fantasía", "misterio" to "Misterio", "romance" to "Romance", "thriller" to "Suspense", "familia" to "Familia", "western" to "Western", "guerra" to "Guerra", "historia" to "Historia", "musica" to "Música")
-            val gi = genres.indexOfFirst { it.first == draft.genre }.coerceAtLeast(0)
-            KeyButton(330.dp, { draft = draft.copy(genre = genres[(gi + 1) % genres.size].first) }) { Text("Género: " + genres[gi].second, color = it) }
+            SearchFilterPicker("Género", genres, draft.genre) { draft = draft.copy(genre = it) }
             val ratings = listOf(0, 5, 6, 7, 8, 9, 10)
-            KeyButton(330.dp, { draft = draft.copy(minRating = ratings[(ratings.indexOf(draft.minRating).coerceAtLeast(0) + 1) % ratings.size]) }) { Text("Nota mínima: " + if (draft.minRating == 0) "Todas" else draft.minRating.toString(), color = it) }
+            SearchFilterPicker("Nota mínima", ratings.map { it to if (it == 0) "Todas" else "$it o superior" }, draft.minRating) { draft = draft.copy(minRating = it) }
             val providers = listOf("" to "Todas las fuentes") + com.shieldstream.tv.model.StreamingPlatforms.labels.entries.map { it.key to it.value } + listOf("stremio" to "Stremio (catálogo general)")
-            val pi = providers.indexOfFirst { it.first == draft.platform }.coerceAtLeast(0)
-            KeyButton(330.dp, { draft = draft.copy(platform = providers[(pi + 1) % providers.size].first) }) { Text("Plataforma: " + providers[pi].second, color = it) }
+            SearchFilterPicker("Plataforma", providers, draft.platform) { draft = draft.copy(platform = it) }
             var period by remember { mutableStateOf(5) }
             val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
             val selected = draft.years + listOfNotNull(draft.year.takeIf { it > 0 })
@@ -543,5 +541,31 @@ private fun SearchFiltersDialog(
                 KeyButton(130.dp, onClose) { Text("Cancelar", color = it) }
             }
         }
+    }
+}
+
+@Composable
+private fun <T> SearchFilterPicker(label: String, options: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val requester = remember { FocusRequester() }
+    var restore by remember { mutableStateOf(false) }
+    LaunchedEffect(open) {
+        if (!open && restore) {
+            withFrameNanos { }
+            runCatching { requester.requestFocus() }
+            restore = false
+        }
+    }
+    KeyButton(460.dp, { restore = true; open = true }, Modifier.focusRequester(requester)) { color ->
+        Text("$label: " + (options.firstOrNull { it.first == selected }?.second ?: "Todos") + "  ▾", color = color,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    if (open) {
+        ActionMenuDialog(title = label, onDismiss = { open = false }, actions = options.map { (value, name) ->
+            ActionMenuItem((if (selected == value) "✓ " else "") + name, null) {
+                onSelected(value)
+                open = false
+            }
+        })
     }
 }
