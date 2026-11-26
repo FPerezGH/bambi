@@ -26,7 +26,7 @@ internal object SpanishSearchKeywords {
         "universos paralelos" to "parallel universe", "superpoderes" to "superpower",
         "monstruos" to "monster", "hombres lobo" to "werewolf", "demonios" to "demon",
         "posesion" to "possession", "casa encantada" to "haunted house", "exorcismo" to "exorcism",
-        "asesino" to "killer", "venganza" to "revenge", "guerra fria" to "cold war",
+        "asesino" to "killer", "guerra fria" to "cold war",
         "guerra civil" to "civil war", "nazis" to "nazi", "holocausto" to "holocaust",
         "biografia" to "biography", "historia real" to "based on true story",
         "basado en hechos reales" to "based on true story", "novela" to "based on novel or book",
