@@ -562,25 +562,68 @@ class CatalogRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getSimilar(item: CatalogItem): List<CatalogItem> {
-        // Do not bypass the existing child-profile certification filters.
         if (kids) return emptyList()
         val id = item.id.toIntOrNull() ?: return emptyList()
-        val related = mutableListOf<CatalogItem>()
-        for (relation in listOf("recommendations", "similar")) {
-            for (page in 1..2) {
-                val result = try {
-                    if (item.type == MediaType.TV)
-                        tmdb.relatedTv(id, relation, key, page = page).results.map { it.toCatalogItem() }
-                    else tmdb.relatedMovies(id, relation, key, page = page).results.map { it.toCatalogItem() }
-                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                catch (e: Exception) { emptyList() }
-                related += result
-                if (related.filter { it.id != item.id && it.posterUrl != null }.distinctBy { it.key }.size >= 30) break
-                if (result.isEmpty()) break
+        val related = linkedMapOf<String, CatalogItem>()
+        var lastError: Exception? = null
+        var successfulRequest = false
+        fun add(items: List<CatalogItem>) {
+            for (candidate in items) {
+                if (candidate.id != item.id && candidate.type == item.type && candidate.posterUrl != null)
+                    related.putIfAbsent(candidate.key, candidate)
             }
-            if (related.filter { it.id != item.id && it.posterUrl != null }.distinctBy { it.key }.size >= 30) break
         }
-        return related.filter { it.id != item.id && it.posterUrl != null }.distinctBy { it.key }.take(30)
+        suspend fun attempt(block: suspend () -> List<CatalogItem>): Boolean {
+            return try {
+                val result = block()
+                successfulRequest = true
+                add(result)
+                result.isNotEmpty()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                lastError = e
+                Log.w("CatalogRepository", "Related titles request failed", e)
+                false
+            }
+        }
+        val series = item.type == MediaType.TV
+        for (recommendations in listOf(true, false)) {
+            for (page in 1..3) {
+                val more = attempt {
+                    if (series) {
+                        (if (recommendations) tmdb.recommendedTv(id, key, page) else tmdb.similarTv(id, key, page))
+                            .results.map { it.toCatalogItem() }
+                    } else {
+                        (if (recommendations) tmdb.recommendedMovies(id, key, page) else tmdb.similarMovies(id, key, page))
+                            .results.map { it.toCatalogItem() }
+                    }
+                }
+                if (!more || related.size >= 30) break
+            }
+            if (related.size >= 30) break
+        }
+        if (related.size < 30) {
+            // Discover titles sharing the original genres, only after official related lists.
+            val genres = try {
+                if (series) tmdb.tvDetails(id, key).genres.map { it.id }
+                else tmdb.movieDetails(id, key).genres.map { it.id }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { lastError = e; emptyList() }
+            if (genres.isNotEmpty()) {
+                for (page in 1..3) {
+                    val params = mapOf("with_genres" to genres.take(3).joinToString(","),
+                        "include_adult" to "false", "sort_by" to "vote_average.desc",
+                        "vote_count.gte" to if (series) "100" else "300", "page" to page.toString())
+                    val more = attempt {
+                        if (series) tmdb.discoverTvQuery(key, params).results.map { it.toCatalogItem() }
+                        else tmdb.discoverMovieQuery(key, params).results.map { it.toCatalogItem() }
+                    }
+                    if (!more || related.size >= 30) break
+                }
+            }
+        }
+        if (related.isEmpty() && !successfulRequest) lastError?.let { throw it }
+        return related.values.take(30)
     }
 
     override suspend fun getDetails(item: CatalogItem): CatalogDetails {

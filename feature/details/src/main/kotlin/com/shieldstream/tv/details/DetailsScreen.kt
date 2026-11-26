@@ -174,8 +174,16 @@ private fun DetailsContent(
     val similarRequester = remember { FocusRequester() }
     var restoreSimilarFocus by remember { mutableStateOf(false) }
     var similarItems by remember(state.details.item.key) { mutableStateOf<List<com.shieldstream.tv.model.CatalogItem>?>(null) }
-    LaunchedEffect(similarOpen, state.details.item.key) {
-        if (similarOpen && similarItems == null) similarItems = viewModel.similarTitles(state.details.item)
+    var similarError by remember(state.details.item.key) { mutableStateOf(false) }
+    var similarRetry by remember { mutableStateOf(0) }
+    LaunchedEffect(similarOpen, state.details.item.key, similarRetry) {
+        if (similarOpen && similarItems == null) {
+            similarError = false
+            try {
+                similarItems = viewModel.similarTitles(state.details.item)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { similarError = true }
+        }
     }
     LaunchedEffect(similarOpen) {
         if (!similarOpen && restoreSimilarFocus) {
@@ -190,27 +198,42 @@ private fun DetailsContent(
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             val closeRequester = remember { FocusRequester() }
-            LaunchedEffect(Unit) {
+            val firstPoster = remember { FocusRequester() }
+            val results = similarItems
+            var selected by remember { mutableStateOf<com.shieldstream.tv.model.CatalogItem?>(null) }
+            LaunchedEffect(results, similarError) {
                 withFrameNanos { }
-                runCatching { closeRequester.requestFocus() }
+                runCatching { if (!results.isNullOrEmpty()) firstPoster.requestFocus() else closeRequester.requestFocus() }
             }
+            val hero = selected ?: results?.firstOrNull()
             Box(Modifier.fillMaxSize().background(Color.Black)) {
-                AsyncImage(model = state.details.item.backdropUrl, contentDescription = null,
+                AsyncImage(model = hero?.backdropUrl ?: state.details.item.backdropUrl, contentDescription = null,
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.80f)).padding(top = 32.dp)) {
-                    SectionTitle("Similares a " + state.details.item.title)
-                    Text(state.details.item.overview, color = Color.White, maxLines = 3,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 56.dp, vertical = 16.dp))
+                Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.78f)).padding(top = 32.dp)) {
+                    Text("Similares a " + state.details.item.title, color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium, maxLines = 2,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 56.dp))
+                    Spacer(Modifier.height(16.dp))
                     TvButton(text = "Volver", onClick = { similarOpen = false },
                         modifier = Modifier.padding(start = 56.dp).focusRequester(closeRequester))
-                    val results = similarItems
                     when {
+                        similarError -> {
+                            SectionTitle("No se han podido cargar las recomendaciones")
+                            TvButton(text = "Reintentar", onClick = { similarError = false; similarRetry++ },
+                                modifier = Modifier.padding(start = 56.dp))
+                        }
                         results == null -> CircularProgressIndicator(modifier = Modifier.padding(56.dp))
-                        results.isEmpty() -> SectionTitle("No hay títulos similares disponibles")
-                        else -> PosterStrip(items = results, onItem = { selected ->
-                            similarOpen = false
-                            onOpenItem(selected)
-                        })
+                        results.isEmpty() -> SectionTitle("No hay títulos similares disponibles para este perfil")
+                        else -> {
+                            hero?.let {
+                                Text(it.title, color = Color.White, style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.padding(start = 56.dp, top = 18.dp))
+                                Text(it.overview, color = Grey, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 56.dp, vertical = 8.dp))
+                            }
+                            PosterStrip(items = results, firstRequester = firstPoster, onFocused = { selected = it },
+                                onItem = { candidate -> similarOpen = false; onOpenItem(candidate) })
+                        }
                     }
                 }
             }
@@ -218,7 +241,7 @@ private fun DetailsContent(
     }
     var ratingTarget by remember { mutableStateOf<TraktRatingTarget?>(null) }
     var episodeMenu by remember { mutableStateOf<Episode?>(null) }
-    BackHandler(enabled = actionsOpen || episodeMenu != null || !panelOpen) {
+    BackHandler(enabled = !similarOpen && (actionsOpen || episodeMenu != null || !panelOpen)) {
         when {
             ratingTarget != null -> ratingTarget = null
             episodeMenu != null -> episodeMenu = null

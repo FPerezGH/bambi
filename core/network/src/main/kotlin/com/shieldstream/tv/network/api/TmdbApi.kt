@@ -19,23 +19,21 @@ import retrofit2.http.Query
 import retrofit2.http.QueryMap
 
 interface TmdbApi {
-    @GET("3/movie/{id}/{relation}")
-    suspend fun relatedMovies(
-        @Path("id") id: Int,
-        @Path("relation") relation: String,
-        @Query("api_key") key: String,
-        @Query("language") language: String = "es-ES",
-        @Query("page") page: Int = 1,
-    ): TmdbPaginated<TmdbMovieDto>
+    @GET("3/movie/{id}/recommendations")
+    suspend fun recommendedMovies(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbMovieDto>
 
-    @GET("3/tv/{id}/{relation}")
-    suspend fun relatedTv(
-        @Path("id") id: Int,
-        @Path("relation") relation: String,
-        @Query("api_key") key: String,
-        @Query("language") language: String = "es-ES",
-        @Query("page") page: Int = 1,
-    ): TmdbPaginated<TmdbTvDto>
+    @GET("3/movie/{id}/similar")
+    suspend fun similarMovies(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbMovieDto>
+
+    @GET("3/tv/{id}/recommendations")
+    suspend fun recommendedTv(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbTvDto>
+
+    @GET("3/tv/{id}/similar")
+    suspend fun similarTv(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbTvDto>
 
     @GET("3/{type}/{id}/watch/providers")
     suspend fun watchProviders(

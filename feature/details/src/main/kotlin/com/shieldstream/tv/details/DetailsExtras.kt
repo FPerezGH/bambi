@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -177,6 +178,8 @@ internal fun PosterStrip(
     onItem: (CatalogItem) -> Unit,
     highlightId: String? = null,
     modifier: Modifier = Modifier,
+    firstRequester: androidx.compose.ui.focus.FocusRequester? = null,
+    onFocused: (CatalogItem) -> Unit = {},
 ) {
     ProvidePivotScroll(leading = 56.dp) {
         LazyRow(
@@ -186,7 +189,8 @@ internal fun PosterStrip(
         ) {
             items(items, key = { it.key }) { item ->
                 Column {
-                    PosterCard(item = item, onClick = { onItem(item) })
+                    PosterCard(item = item, onClick = { onItem(item) }, onFocused = { onFocused(item) },
+                        modifier = if (item.key == items.firstOrNull()?.key && firstRequester != null) Modifier.focusRequester(firstRequester) else Modifier)
                     if (item.id == highlightId) {
                         Spacer(Modifier.height(6.dp))
                         Box(
