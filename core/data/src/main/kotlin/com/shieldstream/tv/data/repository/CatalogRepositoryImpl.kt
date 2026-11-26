@@ -161,7 +161,10 @@ class CatalogRepositoryImpl @Inject constructor(
         if (kids) cachedFeatured("featured_kids_${filter.name}") { extras.kidsFeatured(filter) }
         else {
             val base = cachedFeatured("featured_v3_${filter.name}_${com.shieldstream.tv.model.featuredWeek()}") { extras.featured(filter) }
-            val available = extras.subscriptionFeatured(filter, profiles.active.value.streamingPlatforms, base.map { it.item.key }.toSet())
+            val available = try {
+                extras.subscriptionFeatured(filter, profiles.active.value.streamingPlatforms, base.map { it.item.key }.toSet())
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null }
             base + listOfNotNull(available)
         }
 

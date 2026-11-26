@@ -103,7 +103,7 @@ class FeaturedCacheTest {
     private fun repository(extras: HomeExtrasSource, kids: Boolean = false) = CatalogRepositoryImpl(
         tmdb = mockk<TmdbApi>(relaxed = true),
         torrentio = mockk<TorrentioApi>(relaxed = true),
-        extras = extras,
+        extras = extras.also { coEvery { it.subscriptionFeatured(any(), any(), any()) } returns null },
         store = mockk<TokenStore>(relaxed = true),
         settings = mockk<SettingsRepository>(relaxed = true),
         profiles = mockk<ProfileRepository> {
