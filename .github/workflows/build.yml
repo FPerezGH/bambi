@@ -52,15 +52,15 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
           "$AAPT" dump badging "$APK" | tee apk-identity.txt
           grep -F "package: name='com.cinefran.tv.debug'" apk-identity.txt
-          grep -F "versionCode='110'" apk-identity.txt
-          grep -F "versionName='0.3.0-pruebas'" apk-identity.txt
+          grep -F "versionCode='111'" apk-identity.txt
+          grep -F "versionName='0.3.1-pruebas'" apk-identity.txt
           mkdir -p verified-apk
-          cp "$APK" verified-apk/CINEFRAN-0.3.0.apk
-          sha256sum verified-apk/CINEFRAN-0.3.0.apk | tee verified-apk/SHA256.txt
+          cp "$APK" verified-apk/CINEFRAN-0.3.1.apk
+          sha256sum verified-apk/CINEFRAN-0.3.1.apk | tee verified-apk/SHA256.txt
           cp apk-identity.txt verified-apk/
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: CINEFRAN-0.3.0
+          name: CINEFRAN-0.3.1
           path: verified-apk/
           retention-days: 14
