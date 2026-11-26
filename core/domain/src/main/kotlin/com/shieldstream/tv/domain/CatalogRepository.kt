@@ -17,6 +17,8 @@ interface CatalogRepository {
 
     suspend fun getFeatured(filter: HomeFilter): List<FeaturedItem>
 
+    suspend fun getPersonalFeatured(filter: HomeFilter, history: List<Pair<MediaType, String>>, excluded: Set<String>): FeaturedItem? = null
+
     /** A partir de ahora, lo guardado con más de 30 minutos se vuelve a pedir a la red en vez de enseñarse. */
     fun invalidateHome()
 

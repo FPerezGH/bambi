@@ -74,4 +74,5 @@
     <string name="featured_family">Family viewing</string>
     <string name="featured_hidden_gem">Hidden gems</string>
     <string name="featured_classic">Essential classics</string>
+    <string name="featured_because_watched">Because you watched</string>
 </resources>

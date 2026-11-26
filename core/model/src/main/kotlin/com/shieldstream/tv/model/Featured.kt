@@ -18,6 +18,7 @@ enum class FeaturedBadge {
     FAMILY,
     HIDDEN_GEM,
     CLASSIC,
+    BECAUSE_WATCHED,
 }
 
 data class FeaturedItem(
@@ -29,6 +30,7 @@ data class FeaturedItem(
     val certification: String?,
     /** Clave de YouTube del tráiler que se reproduce en la portada. `null` = solo arte estático. */
     val trailerKey: String? = null,
+    val reasonTitle: String? = null,
 )
 
 enum class Category(val forMovies: Boolean = true, val forTv: Boolean = true) {
@@ -78,4 +80,19 @@ enum class Category(val forMovies: Boolean = true, val forTv: Boolean = true) {
             }
         }
     }
+}
+
+/** Local Monday-based week identity, shared by the disk and memory caches. */
+fun featuredWeek(): String {
+    val c = java.util.Calendar.getInstance()
+    c.firstDayOfWeek = java.util.Calendar.MONDAY
+    c.minimalDaysInFirstWeek = 4
+    val week = c.get(java.util.Calendar.WEEK_OF_YEAR)
+    val month = c.get(java.util.Calendar.MONTH)
+    val year = c.get(java.util.Calendar.YEAR) + when {
+        month == java.util.Calendar.JANUARY && week >= 52 -> -1
+        month == java.util.Calendar.DECEMBER && week == 1 -> 1
+        else -> 0
+    }
+    return "$year-W$week"
 }

@@ -171,6 +171,7 @@ class HomeViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, HomeUiState.Loading)
 
     private var loadedFilter: HomeFilter? = null
+    private var loadedFeaturedWeek: String? = null
     /** Máximo de títulos por fila (Ajustes): decide cuántas páginas se piden a TMDB. */
     private val rowItemLimit = settings.homeRowItemLimit
         .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsRepository.DEFAULT_HOME_ROW_ITEM_LIMIT)
@@ -565,14 +566,33 @@ class HomeViewModel @Inject constructor(
     fun load(filter: HomeFilter, force: Boolean = false, silent: Boolean = false) {
         filterFlow.value = filter
         val limit = rowItemLimit.value
-        if (!force && loadedFilter == filter && loadedLimit == limit && _uiState.value is HomeUiState.Content) return
+        val week = com.shieldstream.tv.model.featuredWeek()
+        if (!force && loadedFilter == filter && loadedLimit == limit && loadedFeaturedWeek == week && _uiState.value is HomeUiState.Content) return
+        loadedFeaturedWeek = week
         prefetchJob?.cancel()
         loadedFilter = filter
         loadedLimit = limit
         viewModelScope.launch {
             // En silencio se mantiene lo que hay en pantalla hasta que llega lo nuevo.
             if (!(silent && _uiState.value is HomeUiState.Content)) _uiState.value = HomeUiState.Loading
-            val featured = async { runCatching { catalogRepository.getFeatured(filter) }.getOrDefault(emptyList()) }
+            val featured = async {
+                val base = runCatching { catalogRepository.getFeatured(filter) }.getOrDefault(emptyList())
+                if (kidsProfile) base else {
+                    val history = watchProgress.progress.value.entries.filter { it.value.isWatched }
+                        .sortedByDescending { it.value.updatedAt }.mapNotNull { entry ->
+                            val parts = entry.key.split(':')
+                            if (parts.size < 2) null else when (parts[0]) {
+                                "movie" -> MediaType.MOVIE to parts[1]
+                                "tv" -> MediaType.TV to parts[1]
+                                else -> null
+                            }
+                        }.distinct().take(20)
+                    val personal = if (history.isEmpty()) null else withTimeoutOrNull(6000) {
+                        runCatching { catalogRepository.getPersonalFeatured(filter, history, base.map { it.item.key }.toSet()) }.getOrNull()
+                    }
+                    base + listOfNotNull(personal)
+                }
+            }
             runCatching { catalogRepository.getHome(filter, limit) }
                 .onSuccess { rows ->
                     _uiState.value = if (rows.isEmpty()) {

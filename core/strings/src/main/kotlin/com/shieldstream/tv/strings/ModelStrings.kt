@@ -62,6 +62,7 @@ val FeaturedBadge.labelResource: Int
         FeaturedBadge.FAMILY -> R.string.featured_family
         FeaturedBadge.HIDDEN_GEM -> R.string.featured_hidden_gem
         FeaturedBadge.CLASSIC -> R.string.featured_classic
+        FeaturedBadge.BECAUSE_WATCHED -> R.string.featured_because_watched
     }
 
 @get:StringRes

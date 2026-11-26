@@ -150,7 +150,7 @@ class HomeExtrasSource @Inject constructor(
             else -> add(unused { true }, FeaturedBadge.RISING)
         }
         add(
-            trending.filter { it.media_type + it.id !in used && it.vote_count >= 300 }.maxByOrNull { it.vote_average },
+            trending.filter { it.media_type + it.id !in used && it.vote_count >= 300 && (if (it.media_type == "tv") "TV" else "MOVIE") + ":" + it.id !in previousKeys }.maxByOrNull { it.vote_average },
             FeaturedBadge.ACCLAIMED,
         )
         data class Candidate(val pick: Pick, val date: String?, val popularity: Double)
@@ -203,7 +203,7 @@ class HomeExtrasSource @Inject constructor(
                     val d = runCatching { tmdb.tvDetails(p.id, key) }.getOrNull() ?: continue
                     val episodes = d.seasons.filter { it.season_number > 0 }.sumOf { it.episode_count }
                     if (episodes !in 1..10 || d.number_of_seasons != 1) continue
-                    if (rule.badge == FeaturedBadge.MINISERIES && d.status !in listOf("Ended", "Canceled")) continue
+                    if (rule.badge == FeaturedBadge.MINISERIES && d.status != "Ended") continue
                 }
                 val k = (if (p.type == MediaType.TV) "tv" else "movie") + p.id
                 if (used.add(k)) picks += p
@@ -211,6 +211,44 @@ class HomeExtrasSource @Inject constructor(
             }
         }
         picks
+    }
+
+    suspend fun personalFeatured(profileId: String, filter: HomeFilter, history: List<Pair<MediaType, String>>, excluded: Set<String>): FeaturedItem? {
+        val week = weekKey()
+        val prefKey = "personal_v1_${profileId}_${filter.name}"
+        val raw = prefs.getString(prefKey, null)?.split('|')
+        if (raw != null && raw.size == 5 && raw[0] == week) {
+            val type = runCatching { MediaType.valueOf(raw[1]) }.getOrNull()
+            val id = raw[2].toIntOrNull()
+            if (type != null && id != null && history.any { it.first == type && it.second == raw[3] }) {
+                val result = runCatching { loadFeatured(Pick(type, id, FeaturedBadge.BECAUSE_WATCHED)) }.getOrNull()
+                if (result != null && result.item.key !in excluded)
+                    return result.copy(reasonTitle = raw[4])
+            }
+        }
+        val previousId = raw?.getOrNull(2)
+        val rotation = kotlin.random.Random(week.hashCode())
+        for ((type, seed) in history.take(5).shuffled(rotation)) {
+            if (filter == HomeFilter.MOVIES && type != MediaType.MOVIE || filter == HomeFilter.TV && type != MediaType.TV) continue
+            val seedId = seed.toIntOrNull() ?: continue
+            val original = runCatching {
+                if (type == MediaType.TV) tmdb.tvDetails(seedId, key).name else tmdb.movieDetails(seedId, key).title
+            }.getOrNull()?.takeIf { it.isNotBlank() } ?: continue
+            val candidates = runCatching {
+                if (type == MediaType.TV) tmdb.recommendedTv(seedId, key).results.map { it.toCatalogItem() }
+                else tmdb.recommendedMovies(seedId, key).results.map { it.toCatalogItem() }
+            }.getOrDefault(emptyList()).filter {
+                it.posterUrl != null && it.backdropUrl != null && it.key !in excluded &&
+                    it.id != previousId && history.none { h -> h.first == it.type && h.second == it.id }
+            }.shuffled(rotation)
+            for (candidate in candidates.take(5)) {
+                val id = candidate.id.toIntOrNull() ?: continue
+                val featured = runCatching { loadFeatured(Pick(type, id, FeaturedBadge.BECAUSE_WATCHED)) }.getOrNull() ?: continue
+                prefs.edit().putString(prefKey, listOf(week, type.name, id.toString(), seed, original.replace('|', ' ')).joinToString("|")).apply()
+                return featured.copy(reasonTitle = original)
+            }
+        }
+        return null
     }
 
     private suspend fun loadFeatured(pick: Pick): FeaturedItem? {
@@ -295,12 +333,7 @@ class HomeExtrasSource @Inject constructor(
     private fun writePicks(week: String, picks: List<Pick>) =
         week + "|" + picks.joinToString("|") { "${it.type.name}:${it.id}:${it.badge.name}" }
 
-    private fun weekKey(): String {
-        val c = Calendar.getInstance(Locale("es", "ES"))
-        c.firstDayOfWeek = Calendar.MONDAY
-        c.minimalDaysInFirstWeek = 4
-        return "${c.get(Calendar.YEAR)}-W${c.get(Calendar.WEEK_OF_YEAR)}"
-    }
+    private fun weekKey(): String = com.shieldstream.tv.model.featuredWeek()
 
     // =====================================================================================
     // =====================================================================================

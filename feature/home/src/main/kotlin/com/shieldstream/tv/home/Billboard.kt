@@ -237,6 +237,7 @@ private fun FeaturedSlide(featured: FeaturedItem, trailerKey: String?) {
         }
         BadgeChip(
             badge = featured.badge,
+            reasonTitle = featured.reasonTitle,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = 28.dp),
         )
     }
@@ -292,7 +293,7 @@ private fun certificationColor(cert: String): Color = when (cert.removeSuffix("+
 }
 
 @Composable
-private fun BadgeChip(badge: FeaturedBadge, modifier: Modifier = Modifier) {
+private fun BadgeChip(badge: FeaturedBadge, modifier: Modifier = Modifier, reasonTitle: String? = null) {
     val (icon, tint) = badgeIcon(badge)
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -304,7 +305,10 @@ private fun BadgeChip(badge: FeaturedBadge, modifier: Modifier = Modifier) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(
-            text = badge.localizedLabel(),
+            text = if (badge == FeaturedBadge.BECAUSE_WATCHED && reasonTitle != null) "${badge.localizedLabel()} $reasonTitle" else badge.localizedLabel(),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 280.dp),
             color = Color.White,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
         )
@@ -329,6 +333,7 @@ private fun badgeIcon(badge: FeaturedBadge): Pair<ImageVector, Color> = when (ba
     FeaturedBadge.FAMILY -> AppIcons.Movie to Color(0xFFFFC94A)
     FeaturedBadge.HIDDEN_GEM -> AppIcons.Star to Color(0xFFFFC94A)
     FeaturedBadge.CLASSIC -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.BECAUSE_WATCHED -> AppIcons.Star to Color(0xFFFFC94A)
 }
 
 /**
