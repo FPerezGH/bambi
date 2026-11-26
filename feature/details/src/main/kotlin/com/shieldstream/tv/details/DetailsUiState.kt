@@ -58,6 +58,7 @@ sealed interface DetailsUiState {
         val brokenSources: Set<String> = emptySet(),
         /** Mostrar la fila de reparto y equipo (Ajustes). */
         val showCast: Boolean = true,
+        val stremioExternal: Boolean = false,
         val inMyList: Boolean = false,
         val following: Boolean = false,
         val ratings: TraktRatingsState = TraktRatingsState.Idle,
@@ -76,6 +77,7 @@ sealed interface DetailsUiState {
 
 sealed interface DetailsEvent {
     data object OpenPlayer : DetailsEvent
+    data class OpenStremio(val item: com.shieldstream.tv.model.CatalogItem, val episode: Episode?, val spanishOnly: Boolean) : DetailsEvent
 }
 
 /**

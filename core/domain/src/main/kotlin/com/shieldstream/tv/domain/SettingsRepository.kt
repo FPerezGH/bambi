@@ -119,6 +119,9 @@ interface SettingsRepository {
     suspend fun clearBrokenSources()
 
     /** Servicio debrid en uso (Real-Debrid por defecto). */
+    /** External playback is opt-in for implementations other than the Stremio build. */
+    val stremioExternal: Flow<Boolean> get() = kotlinx.coroutines.flow.flowOf(false)
+    suspend fun setStremioExternal(enabled: Boolean) {}
     val debridEnabled: Flow<Boolean> get() = kotlinx.coroutines.flow.flowOf(true)
     suspend fun setDebridEnabled(enabled: Boolean) {}
     val debridService: Flow<DebridService>

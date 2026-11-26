@@ -228,6 +228,14 @@ class SettingsRepositoryImpl @Inject constructor(
         homeRowItemLimitFlow.value = normalized
     }
 
+    private val stremioExternalFlow = MutableStateFlow(prefs.getBoolean("stremio_external", true))
+    override val stremioExternal: Flow<Boolean> = kotlinx.coroutines.flow.combine(stremioExternalFlow, profiles.active) { enabled, profile -> enabled && !profile.kids }.distinctUntilChanged()
+    override suspend fun setStremioExternal(enabled: Boolean) {
+        if (profiles.active.value.kids) return
+        prefs.edit().putBoolean("stremio_external", enabled).apply()
+        stremioExternalFlow.value = enabled
+    }
+
     private val debridEnabledFlow = MutableStateFlow(prefs.getBoolean("debrid_enabled", false))
     override val debridEnabled: Flow<Boolean> = debridEnabledFlow
     override suspend fun setDebridEnabled(enabled: Boolean) {

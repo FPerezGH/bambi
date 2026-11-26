@@ -179,6 +179,7 @@ private fun SettingsList(
                 }
             }
             item { SectionTitle("Servicios de reproducción") }
+            item { PlaybackModeCard() }
             item { OptionalDebridCard() }
             item { SectionTitle(localizedStringResource(StringsR.string.settings_debrid_service)) }
             item {
@@ -381,6 +382,17 @@ private fun OptionalDebridCard(viewModel: SettingsViewModel = hiltViewModel()) {
         Column {
             Text("Utilizar Debrid: " + if (enabled) "Activado" else "Desactivado", color = Color.White, style = MaterialTheme.typography.titleLarge)
             Text("Sin Debrid se reproducen enlaces directos compatibles de los addons configurados. No incluye motor torrent.", color = SettingsMuted, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun PlaybackModeCard(viewModel: SettingsViewModel = hiltViewModel()) {
+    val external by viewModel.stremioExternal.collectAsStateWithLifecycle()
+    FocusCard(onClick = { viewModel.setStremioExternal(!external) }) { _ ->
+        Column {
+            Text("Modo de reproducción: " + if (external) "Stremio externo" else "CINEFRAN interno", color = Color.White, style = MaterialTheme.typography.titleLarge)
+            Text(if (external) "Abre el título o episodio en Stremio. Configura el idioma y los filtros de fuentes en Stremio; CINEFRAN no puede transferir Solo en español." else "Reproductor original, con Debrid opcional.", color = SettingsMuted, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

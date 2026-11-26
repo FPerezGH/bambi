@@ -18,6 +18,11 @@
         android:required="false" />
 
     <queries>
+        <package android:name="com.stremio.one" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="stremio" />
+        </intent>
         <package android:name="com.netflix.ninja" />
         <package android:name="com.amazon.amazonvideo.livingroom" />
         <package android:name="com.wbd.stream" />

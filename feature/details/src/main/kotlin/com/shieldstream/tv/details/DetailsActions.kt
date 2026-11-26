@@ -111,6 +111,7 @@ internal fun DetailsActions(
                 )
                 // La descarga de ESTE episodio siempre va aquí: descargarlo, o pausar/borrar si ya está. Varios episodios
                 // o la temporada van en la sección de la serie ("Descargar varios…").
+                if (!state.stremioExternal) {
                 if (download == null || download.status == DownloadStatus.FAILED) {
                     MoreRow(
                         text = localizedStringResource(StringsR.string.downloads_download_episode),
@@ -120,6 +121,7 @@ internal fun DetailsActions(
                     )
                 } else {
                     DownloadMoreRow(download, onOpenOptions = { downloadMenu = true }, onDownloadAction = onDownloadAction)
+                }
                 }
                 val target = TraktRatingTarget.Episode(item.id, episode.season, episode.number)
                 MoreRow(
@@ -146,7 +148,7 @@ internal fun DetailsActions(
                 highlighted = state.following,
                 onClick = onToggleFollowing,
             )
-            MoreRow(
+            if (!state.stremioExternal) MoreRow(
                 text = localizedStringResource(StringsR.string.downloads_download_several),
                 icon = LineIcons.Download,
                 detail = localizedStringResource(StringsR.string.downloads_options_hint),
@@ -172,7 +174,7 @@ internal fun DetailsActions(
                 highlighted = state.inMyList,
                 onClick = onToggleMyList,
             )
-            DownloadMoreRow(download, onOpenOptions = { downloadMenu = true }, onDownloadAction = onDownloadAction)
+            if (!state.stremioExternal) DownloadMoreRow(download, onOpenOptions = { downloadMenu = true }, onDownloadAction = onDownloadAction)
             val movie = TraktRatingTarget.Movie(item.id)
             MoreRow(ratingTargetLabel(state, movie) + ratingSuffix(ratings?.overallRating), LineIcons.Star, { onRate(movie) })
         }
@@ -451,10 +453,10 @@ internal fun EpisodeActions(
         onDismiss = onDismiss,
         scrimAlpha = 0.88f,
         consumeOpeningKeyRelease = true,
-        actions = listOf(
+        actions = listOfNotNull(
             ActionMenuItem(localizedStringResource(StringsR.string.details_cancel), LineIcons.Close, onDismiss),
-            ActionMenuItem(localizedStringResource(StringsR.string.details_episode_play), AppIcons.Play, onPlay),
-            ActionMenuItem(
+            ActionMenuItem(if (state.stremioExternal) "Abrir en Stremio" else localizedStringResource(StringsR.string.details_episode_play), AppIcons.Play, onPlay),
+            if (!state.stremioExternal) ActionMenuItem(
                 localizedStringResource(
                     when {
                         download?.isDone == true -> StringsR.string.downloads_delete
@@ -464,7 +466,7 @@ internal fun EpisodeActions(
                 ),
                 if (download?.isDone == true) LineIcons.Delete else LineIcons.Download,
                 onDownload,
-            ),
+            ) else null,
             ActionMenuItem(
                 text = localizedStringResource(
                     if (episodeMenuTogglesToWatched(state, episode)) {

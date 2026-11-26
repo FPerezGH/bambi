@@ -327,6 +327,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    val stremioExternal = settings.stremioExternal.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    fun setStremioExternal(enabled: Boolean) { viewModelScope.launch { settings.setStremioExternal(enabled) } }
+
     val debridEnabled = settings.debridEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     fun setDebridEnabled(enabled: Boolean) { viewModelScope.launch { settings.setDebridEnabled(enabled) } }
 

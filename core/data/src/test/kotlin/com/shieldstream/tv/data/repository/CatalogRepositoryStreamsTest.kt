@@ -34,6 +34,7 @@ class CatalogRepositoryStreamsTest {
     private val settings = mockk<SettingsRepository> {
         every { sourceProviders } returns MutableStateFlow(setOf(SourceProvider.TORRENTIO, SourceProvider.KNABEN))
         every { debridService } returns MutableStateFlow(DebridService.ALLDEBRID)
+        every { debridEnabled } returns MutableStateFlow(true)
         every { spanishFirst } returns MutableStateFlow(false)
     }
     private val store = mockk<TokenStore> {

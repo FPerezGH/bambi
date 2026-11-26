@@ -298,15 +298,16 @@ class DetailsViewModel @Inject constructor(
         requestedAtNs = request.requestedAtNs
         detailsLoaded = false
         trace("details_opened")
-        val prefetchAutoplay = request.playImmediately &&
+        viewModelScope.launch {
+        val external = settings.stremioExternal.first()
+        val prefetchAutoplay = !external && request.playImmediately &&
             (item.type == MediaType.MOVIE || request.target != null)
-        if (request.playImmediately) {
+        if (request.playImmediately && !external) {
             _uiState.value = DetailsUiState.Content(
                 CatalogDetails(item),
                 progress = watchProgress.progress.value,
             )
         }
-        viewModelScope.launch {
             if (prefetchAutoplay) {
                 val target = request.target
                 if (item.type == MediaType.TV && target != null) {
@@ -327,7 +328,7 @@ class DetailsViewModel @Inject constructor(
             val sourceExclusions = settings.sourceExclusions.first()
             val brokenSources = settings.brokenSourceIds.first()
             val showCast = settings.showCast.first()
-            if (request.playImmediately) {
+            if (request.playImmediately && !external) {
                 updateContent {
                     it.copy(
                         details = details,
@@ -338,6 +339,7 @@ class DetailsViewModel @Inject constructor(
                         sourceExclusions = sourceExclusions,
                         brokenSources = brokenSources,
                         showCast = showCast,
+                    stremioExternal = external,
                     )
                 }
             } else {
@@ -350,6 +352,7 @@ class DetailsViewModel @Inject constructor(
                     sourceExclusions = sourceExclusions,
                     brokenSources = brokenSources,
                     showCast = showCast,
+                    stremioExternal = external,
                 )
             }
             detailsLoaded = true
@@ -385,7 +388,7 @@ class DetailsViewModel @Inject constructor(
                     }
                 }
             } else {
-                if (playImmediately) play() else loadSources(episode = null)
+                if (playImmediately) play() else if (!external) loadSources(episode = null)
             }
         }
     }
@@ -469,6 +472,7 @@ class DetailsViewModel @Inject constructor(
 
     fun play(fromStart: Boolean = false) {
         val c = content() ?: return
+        if (c.stremioExternal) { openStremio(c.selectedEpisode); return }
         pendingFromStart = fromStart
         if (c.isSeries) {
             val ep = c.selectedEpisode ?: return
@@ -493,6 +497,7 @@ class DetailsViewModel @Inject constructor(
 
     fun playEpisode(episode: Episode, fromStart: Boolean = false) {
         val c = content() ?: return
+        if (c.stremioExternal) { openStremio(episode); return }
         pendingFromStart = fromStart
         if (playDownloaded(c.copy(selectedEpisode = episode), episode, fromStart)) {
             updateContent { it.copy(selectedEpisode = episode) }
@@ -510,6 +515,12 @@ class DetailsViewModel @Inject constructor(
         }
         updateContent { it.copy(selectedEpisode = episode, pendingPlay = true) }
         if (!(sameEpisode && c.sources == SourcesState.Loading)) loadSources(episode)
+    }
+
+    fun openStremio(episode: Episode? = null) {
+        val c = content() ?: return
+        if (!c.stremioExternal) return
+        _events.tryEmit(DetailsEvent.OpenStremio(c.details.item, episode?.takeIf { c.isSeries }, c.spanishOnly))
     }
 
     fun ensureSources() {
@@ -599,6 +610,7 @@ class DetailsViewModel @Inject constructor(
 
     private fun loadSources(episode: Episode?) {
         val c = content() ?: return
+        if (c.stremioExternal) return
         sourcesJob?.cancel()
         updateContent { it.copy(sources = SourcesState.Loading) }
         var sourcesLogged = false

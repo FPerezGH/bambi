@@ -112,6 +112,7 @@ fun DetailsScreen(
     viewModel: DetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -119,6 +120,7 @@ fun DetailsScreen(
             viewModel.events.collect { event ->
                 when (event) {
                     DetailsEvent.OpenPlayer -> onPlay()
+                    is DetailsEvent.OpenStremio -> StremioLauncher.open(context, event.item, event.episode, event.spanishOnly)
                 }
             }
         }
@@ -164,7 +166,7 @@ private fun DetailsContent(
     // La fuente elegida a mano falló (sin cambio automático): se vuelve con la lista abierta para elegir otra.
     val reopenSources by viewModel.reopenSources.collectAsStateWithLifecycle()
     LaunchedEffect(reopenSources) {
-        if (reopenSources) {
+        if (reopenSources && !state.stremioExternal) {
             panelOpen = true
             viewModel.sourcesReopened()
         }
@@ -305,6 +307,7 @@ private fun DetailsContent(
                 interactive = !panelOpen && !actionsOpen && episodeMenu == null,
                 playRequester = playRequester,
                 onPlay = { viewModel.play() },
+                onStremio = { viewModel.openStremio() },
                 onPlayFromStart = { viewModel.play(fromStart = true) },
                 onOpenSources = {
                     viewModel.ensureSources()
@@ -372,7 +375,7 @@ private fun DetailsContent(
             downloadList,
             preparing = plannerProgress?.let { "${it.done + 1}/${it.total}" },
         )
-        if (indicator != null && indicator.busy && !panelOpen && !actionsOpen) {
+        if (!state.stremioExternal && indicator != null && indicator.busy && !panelOpen && !actionsOpen) {
             DownloadIndicator(
                 state = indicator,
                 onClick = null,
@@ -381,7 +384,7 @@ private fun DetailsContent(
         }
 
         AnimatedVisibility(
-            visible = detailsSourcesVisible(panelOpen, actionsOpen),
+            visible = !state.stremioExternal && detailsSourcesVisible(panelOpen, actionsOpen),
             enter = fadeIn() + slideInHorizontally { it / 3 },
             exit = fadeOut() + slideOutHorizontally { it / 3 },
             modifier = Modifier.zIndex(2f),
@@ -499,6 +502,7 @@ private fun InfoBlock(
     interactive: Boolean,
     playRequester: FocusRequester,
     onPlay: () -> Unit,
+    onStremio: () -> Unit,
     onPlayFromStart: () -> Unit,
     onOpenSources: () -> Unit,
     onOpenActions: () -> Unit,
@@ -571,6 +575,11 @@ private fun InfoBlock(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(20.dp))
+        if (state.stremioExternal) {
+            StremioPlatformButton(interactive, Modifier.focusRequester(playRequester), onStremio)
+            if (state.spanishOnly) Text("Solo en español: configura el filtro de fuentes en Stremio.", color = Grey, style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(8.dp))
+        }
         OfficialPlatformButtons(details.platformButtons, item, interactive, details.platformOpening)
         if (details.platformButtons.isNotEmpty()) Spacer(Modifier.height(12.dp))
 
@@ -587,6 +596,7 @@ private fun InfoBlock(
                 resumable -> localizedStringResource(StringsR.string.details_resume_episode, episodeCode)
                 else -> localizedStringResource(StringsR.string.details_play_episode, episodeCode)
             }
+            if (!state.stremioExternal) {
             TvButton(
                 text = playLabel,
                 icon = AppIcons.Play,
@@ -607,6 +617,7 @@ private fun InfoBlock(
                 onClick = onOpenSources,
                 enabled = interactive,
             )
+            }
             if (onTrailer != null) {
                 TvButton(
                     text = localizedStringResource(StringsR.string.details_trailer),
@@ -642,7 +653,7 @@ private fun InfoBlock(
             }
         }
         Spacer(Modifier.height(12.dp))
-        SourcesStatus(state)
+        if (!state.stremioExternal) SourcesStatus(state)
     }
 }
 

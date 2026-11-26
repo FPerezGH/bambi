@@ -71,6 +71,7 @@ class SettingsViewModelTest {
         every { seekThumbnails } returns MutableStateFlow(false)
         every { debridService } returns MutableStateFlow(DebridService.REAL_DEBRID)
         every { debridEnabled } returns MutableStateFlow(false)
+        every { stremioExternal } returns MutableStateFlow(false)
         every { deviceOptimization } returns MutableStateFlow(DeviceOptimization.AUTOMATIC)
         every { experimentalSubtitleSync } returns MutableStateFlow(true)
 

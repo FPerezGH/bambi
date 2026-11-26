@@ -435,6 +435,7 @@ class DetailsViewModelTest {
             },
             settings = mockk<SettingsRepository>(relaxed = true) {
                 every { spanishFirst } returns flowOf(false)
+        every { stremioExternal } returns MutableStateFlow(false)
                 every { spanishOnlySources } returns flowOf(false)
                 every { sourceExclusions } returns flowOf(exclusions)
                 every { brokenSourceIds } returns flowOf(emptySet())
