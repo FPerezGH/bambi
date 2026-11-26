@@ -104,7 +104,7 @@ fun MainScreen(
                     topBar(Modifier)
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         when (tab) {
-                            TopTab.SEARCH -> SearchScreen(onItemClick = onOpenItem)
+                            TopTab.SEARCH -> saveable.SaveableStateProvider("tab_SEARCH") { SearchScreen(onItemClick = onOpenItem) }
                             TopTab.EPISODES -> EpisodeCenterScreen(onOpenEpisode = onOpenNewEpisode, viewModel = episodeCenter)
                             else -> saveable.SaveableStateProvider("tab_${tab.name}") { MyListScreen(onItemClick = onOpenItem) }
                         }

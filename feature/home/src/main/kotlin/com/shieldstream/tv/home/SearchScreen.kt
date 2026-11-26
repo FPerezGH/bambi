@@ -9,6 +9,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -118,17 +126,16 @@ fun SearchScreen(
     val cardRequester = remember { FocusRequester() }
     val firstResultRequester = remember { FocusRequester() }
     var keyboardVisible by rememberSaveable { mutableStateOf(true) }
-    var lastCardKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastCardKey by rememberSaveable(query, orderMode, orderYear, filters.toString()) { mutableStateOf<String?>(null) }
+    // Save the actual opened title (not the first visible grid item), then restore only on return.
+    var returnKey by rememberSaveable(query, orderMode, orderYear, filters.toString()) { mutableStateOf<String?>(null) }
+    var restoreRequested by remember { mutableStateOf(returnKey != null) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (returnKey != null) restoreRequested = true
+    }
     LaunchedEffect(Unit) {
         withFrameNanos { }
-        val backOnCard = lastCardKey != null && run {
-            repeat(4) {
-                if (runCatching { cardRequester.requestFocus() }.isSuccess) return@run true
-                delay(60)
-            }
-            false
-        }
-        if (!backOnCard) runCatching { firstKey.requestFocus() }
+        if (returnKey == null && (keyboardVisible || !carouselMode)) runCatching { firstKey.requestFocus() }
     }
 
     val keyboard = LocalSoftwareKeyboardController.current
@@ -219,7 +226,7 @@ fun SearchScreen(
             )
         }
 
-        Column(Modifier.weight(1f).fillMaxHeight().padding(top = 40.dp, end = 24.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight().padding(top = if (carouselMode && !keyboardVisible) 8.dp else 24.dp, end = 24.dp)) {
             val header = when (val s = state) {
                 SearchUiState.Loading -> localizedStringResource(StringsR.string.home_searching)
                 is SearchUiState.Suggestions -> localizedStringResource(StringsR.string.home_most_watched_today)
@@ -234,6 +241,7 @@ fun SearchScreen(
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.weight(1f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 KeyButton(width = 94.dp, onClick = { if (keyboardVisible || !carouselMode) { carouselMode = true; keyboardVisible = false } else { carouselMode = false; keyboardVisible = true } }) {
                     Text(if (carouselMode && !keyboardVisible) "Cuadrícula" else "Carrusel", color = it, style = MaterialTheme.typography.bodySmall)
@@ -271,12 +279,43 @@ fun SearchScreen(
             val locked = allLocked.drop((start - allItems.size).coerceAtLeast(0))
                 .take((end - maxOf(start, allItems.size)).coerceAtLeast(0))
             val gridState = rememberLazyGridState()
+            val showCarousel = carouselMode && !keyboardVisible && items.isNotEmpty() && locked.isEmpty()
             fun changePage(next: Int) {
                 page = next.coerceIn(0, pages - 1)
                 lastCardKey = null
+                returnKey = null
+                restoreRequested = false
             }
-            LaunchedEffect(currentPage) {
-                if (gridState.layoutInfo.totalItemsCount > 0) gridState.scrollToItem(0)
+            // Page changes deliberately reset the scroll. Returning from a detail never does.
+            LaunchedEffect(currentPage, query, orderMode, orderYear, filters, showCarousel) {
+                if (!showCarousel && returnKey == null && gridState.layoutInfo.totalItemsCount > 0) gridState.scrollToItem(0)
+            }
+            LaunchedEffect(restoreRequested, returnKey, allItems, currentPage, showCarousel) {
+                val target = returnKey
+                if (!restoreRequested || target == null || state !is SearchUiState.Results && state !is SearchUiState.Suggestions) return@LaunchedEffect
+                val location = searchReturnLocation(allItems, target, pageSize)
+                if (location == null) {
+                    returnKey = null
+                    restoreRequested = false
+                    return@LaunchedEffect
+                }
+                if (currentPage != location.first) {
+                    page = location.first
+                    return@LaunchedEffect
+                }
+                if (!showCarousel) {
+                    lastCardKey = target
+                    gridState.scrollToItem(location.second)
+                    repeat(12) {
+                        withFrameNanos { }
+                        if (runCatching { cardRequester.requestFocus() }.getOrDefault(false)) {
+                            returnKey = null
+                            restoreRequested = false
+                            return@LaunchedEffect
+                        }
+                        delay(50)
+                    }
+                }
             }
             if (pages > 1) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -304,21 +343,17 @@ fun SearchScreen(
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                 )
             }
-            if (carouselMode && !keyboardVisible && items.isNotEmpty() && locked.isEmpty()) {
-                val rows = remember(items) {
-                    listOf(com.shieldstream.tv.model.CatalogRow("search_page", "Resultados", items))
-                }
-                Box(Modifier.fillMaxSize()) {
-                    androidx.compose.runtime.key(currentPage, query, orderMode, orderYear) {
-                        RowsBrowserContent(
-                            rows = rows,
-                            onItemClick = onItemClick,
-                            onRemoveContinue = {},
-                            onRemoveMyList = {},
-                            onExitTop = { keyboardVisible = true },
-                            onBack = { keyboardVisible = true },
-                        )
-                    }
+            if (showCarousel) {
+                androidx.compose.runtime.key(currentPage, query, orderMode, orderYear, filters) {
+                    SearchResultsCarousel(
+                        items = items,
+                        initialKey = returnKey ?: lastCardKey,
+                        restoreKey = returnKey.takeIf { restoreRequested },
+                        onRestored = { returnKey = null; restoreRequested = false },
+                        onFocused = { lastCardKey = it.key },
+                        onItemClick = { item -> lastCardKey = item.key; returnKey = item.key; onItemClick(item) },
+                        onExit = { keyboardVisible = true },
+                    )
                 }
             } else LazyVerticalGrid(
                 state = gridState,
@@ -331,11 +366,10 @@ fun SearchScreen(
                 items(items, key = { it.key }) { item ->
                     PosterCard(
                         item = item,
-                        onClick = { onItemClick(item) },
+                        onClick = { lastCardKey = item.key; returnKey = item.key; onItemClick(item) },
                         onFocused = { lastCardKey = item.key },
                         width = 118.dp,
-                        modifier = Modifier.then(if (item.key == items.firstOrNull()?.key) Modifier.focusRequester(firstResultRequester) else Modifier)
-                            .then(if (item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier),
+                        modifier = Modifier.then(if (item.key == (returnKey ?: lastCardKey)) Modifier.focusRequester(cardRequester) else if (item.key == items.firstOrNull()?.key) Modifier.focusRequester(firstResultRequester) else Modifier),
                     )
                 }
                 if (locked.isNotEmpty()) {
@@ -365,6 +399,78 @@ fun SearchScreen(
                             overlay = { LockedOverlay(asked) },
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/** Locate a title in the complete ordered result list, independently of its old page. */
+internal fun searchReturnLocation(items: List<CatalogItem>, key: String, pageSize: Int): Pair<Int, Int>? {
+    val index = items.indexOfFirst { it.key == key }
+    val size = pageSize.coerceAtLeast(1)
+    return if (index < 0) null else index / size to index % size
+}
+
+/** A single bounded row, without the tall multi-row browser header or vertical pivot padding. */
+@Composable
+private fun SearchResultsCarousel(
+    items: List<CatalogItem>,
+    initialKey: String?,
+    restoreKey: String?,
+    onRestored: () -> Unit,
+    onFocused: (CatalogItem) -> Unit,
+    onItemClick: (CatalogItem) -> Unit,
+    onExit: () -> Unit,
+) {
+    val initialIndex = items.indexOfFirst { it.key == initialKey }.coerceAtLeast(0)
+    val rowState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    var focusedKey by rememberSaveable { mutableStateOf(items[initialIndex].key) }
+    var requestedKey by remember { mutableStateOf(items[initialIndex].key) }
+    val requester = remember { FocusRequester() }
+    val hero = items.firstOrNull { it.key == focusedKey } ?: items.first()
+    LaunchedEffect(restoreKey, items.map { it.key }) {
+        val target = restoreKey ?: focusedKey
+        val index = items.indexOfFirst { it.key == target }.coerceAtLeast(0)
+        requestedKey = items[index].key
+        if (rowState.layoutInfo.visibleItemsInfo.none { it.index == index }) rowState.scrollToItem(index)
+        repeat(12) {
+            withFrameNanos { }
+            if (runCatching { requester.requestFocus() }.getOrDefault(false)) {
+                if (restoreKey != null) onRestored()
+                return@LaunchedEffect
+            }
+            delay(50)
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize().onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) { onExit(); true } else false
+    }) {
+        // Guarantee room for both the selected-title metadata and the complete poster, including focus zoom.
+        val posterWidth = ((maxHeight - 154.dp) / 1.65f).coerceIn(64.dp, 116.dp)
+        val rowHeight = posterWidth * 1.65f + 20.dp
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f).fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp),
+                verticalArrangement = Arrangement.Center) {
+                Text(hero.title, color = Color.White, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(4.dp))
+                com.shieldstream.tv.ui.component.TitlePreviewMetadata(hero)
+                if (maxHeight >= 260.dp && hero.overview.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(hero.overview, color = Color.White.copy(alpha = .85f), style = MaterialTheme.typography.bodySmall,
+                        maxLines = if (maxHeight >= 340.dp) 2 else 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            LazyRow(state = rowState, modifier = Modifier.fillMaxWidth().height(rowHeight),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                items(items, key = { it.key }) { item ->
+                    PosterCard(item = item, width = posterWidth,
+                        onClick = { onItemClick(item) },
+                        onFocused = { focusedKey = item.key; onFocused(item) },
+                        modifier = if (item.key == requestedKey) Modifier.focusRequester(requester) else Modifier)
                 }
             }
         }
