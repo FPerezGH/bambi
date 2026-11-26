@@ -24,6 +24,7 @@ data class CatalogDetails(
     val collection: CollectionRef? = null,
     val officialProviders: List<OfficialProvider> = emptyList(),
     val platformButtons: List<PlatformAvailability> = emptyList(),
+    val platformOpening: PlatformOpening = PlatformOpening.PLAY,
 )
 
 data class Person(

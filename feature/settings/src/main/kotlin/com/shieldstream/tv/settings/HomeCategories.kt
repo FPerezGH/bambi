@@ -212,19 +212,50 @@ internal fun HomeRowsPreferencesDialog(
 internal fun PlatformPreferencesDialog(
     profile: com.shieldstream.tv.model.Profile,
     onToggle: (String) -> Unit,
+    onOpening: (com.shieldstream.tv.model.PlatformOpening) -> Unit,
     onClose: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val pm = context.packageManager
     val first = remember { FocusRequester() }
+    var message by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { delay(150); runCatching { first.requestFocus() } }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.width(620.dp).background(Panel, RoundedCornerShape(18.dp)).padding(24.dp),
+        Column(Modifier.width(820.dp).background(Panel, RoundedCornerShape(18.dp)).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Mis plataformas", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text("Stremio conserva sus fuentes originales.", color = Dim, fontSize = 16.sp)
-            com.shieldstream.tv.model.StreamingPlatforms.labels.entries.forEachIndexed { index, entry ->
-                PreferenceToggle(entry.value, entry.key in profile.streamingPlatforms, { onToggle(entry.key) },
-                    if (index == 0) Modifier.focusRequester(first) else Modifier)
+            Text("Inicia sesión en las aplicaciones oficiales; CINEFRAN no guarda contraseñas.", color = Dim, fontSize = 15.sp)
+            LazyVerticalGrid(columns = GridCells.Fixed(1), modifier = Modifier.height(220.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(com.shieldstream.tv.model.StreamingPlatforms.labels.entries.toList(), key = { _, e -> e.key }) { index, entry ->
+                    val intent = com.shieldstream.tv.model.StreamingPlatforms.packages(entry.key).firstNotNullOfOrNull { pkg ->
+                        pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PreferenceToggle(entry.value, entry.key in profile.streamingPlatforms, { onToggle(entry.key) },
+                            Modifier.weight(1f).then(if (index == 0) Modifier.focusRequester(first) else Modifier))
+                        Text(if (intent != null) "Instalada" else "No instalada", color = Dim, fontSize = 14.sp)
+                        DialogButton("Abrir") {
+                            try {
+                                if (intent != null) context.startActivity(intent)
+                                else message = "Instala " + entry.value + " desde Google Play."
+                            } catch (_: Exception) { message = "No se ha podido abrir " + entry.value }
+                        }
+                    }
+                }
             }
+            Text("Preferencia de apertura", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((mode, label) in listOf(
+                    com.shieldstream.tv.model.PlatformOpening.PLAY to "Reproducir",
+                    com.shieldstream.tv.model.PlatformOpening.DETAILS to "Ficha",
+                    com.shieldstream.tv.model.PlatformOpening.APP to "Aplicación",
+                )) {
+                    DialogButton(if (mode == profile.platformOpening) "✓ $label" else label) { onOpening(mode) }
+                }
+            }
+            Text("Stremio conserva sus fuentes originales.", color = Dim, fontSize = 14.sp)
+            if (message.isNotEmpty()) Text(message, color = Dim, fontSize = 14.sp)
             DialogButton("Aceptar", onClose)
         }
     }

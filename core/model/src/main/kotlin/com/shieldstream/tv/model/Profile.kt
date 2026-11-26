@@ -22,6 +22,7 @@ data class Profile(
     val hiddenHomeRows: Set<String> = emptySet(),
     val homeRowOrder: Map<String, List<String>> = emptyMap(),
     val streamingPlatforms: Set<String> = StreamingPlatforms.defaults,
+    val platformOpening: PlatformOpening = PlatformOpening.PLAY,
 ) {
     val initial: String get() = name.trim().firstOrNull()?.uppercase() ?: "?"
 

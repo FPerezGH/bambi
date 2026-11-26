@@ -34,7 +34,17 @@ object HomeSections {
     }
 }
 
+enum class PlatformOpening { PLAY, DETAILS, APP }
+
 object StreamingPlatforms {
+    fun packages(key: String): List<String> = when (key) {
+        "netflix" -> listOf("com.netflix.ninja")
+        "prime" -> listOf("com.amazon.amazonvideo.livingroom")
+        "max" -> listOf("com.wbd.stream", "com.hbo.hbonow")
+        "movistar" -> listOf("es.plus.yomvi")
+        "vodafone" -> listOf("com.vodafone.vtv")
+        else -> emptyList()
+    }
     val labels = linkedMapOf("netflix" to "Netflix", "prime" to "Prime Video", "max" to "HBO Max",
         "movistar" to "Movistar Plus+", "vodafone" to "Vodafone TV")
     val defaults: Set<String> get() = labels.keys.toSet()

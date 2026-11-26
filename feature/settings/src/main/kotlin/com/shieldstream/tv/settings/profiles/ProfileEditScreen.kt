@@ -321,6 +321,7 @@ fun ProfileEditScreen(
     if (choosingPlatforms) {
         com.shieldstream.tv.settings.PlatformPreferencesDialog(
             profile = profile, onToggle = viewModel::togglePlatform,
+            onOpening = viewModel::setPlatformOpening,
             onClose = { choosingPlatforms = false },
         )
     }

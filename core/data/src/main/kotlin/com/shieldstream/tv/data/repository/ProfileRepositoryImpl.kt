@@ -135,6 +135,7 @@ class ProfileRepositoryImpl @Inject constructor(
         val hiddenHomeRows: Set<String> = emptySet(),
         val homeRowOrder: Map<String, List<String>> = emptyMap(),
         val streamingPlatforms: Set<String> = com.shieldstream.tv.model.StreamingPlatforms.defaults,
+        val platformOpening: com.shieldstream.tv.model.PlatformOpening = com.shieldstream.tv.model.PlatformOpening.PLAY,
     ) {
         fun toProfile(legacyFirst: Boolean, legacyOnly: Boolean, legacyHidden: Set<String>) = Profile(
             id, name, avatar, traktUser, pinHash, kids,
@@ -160,6 +161,7 @@ class ProfileRepositoryImpl @Inject constructor(
             hiddenHomeRows = hiddenHomeRows,
             homeRowOrder = homeRowOrder,
             streamingPlatforms = streamingPlatforms,
+            platformOpening = platformOpening,
         )
 
         companion object {
@@ -190,6 +192,7 @@ class ProfileRepositoryImpl @Inject constructor(
                 hiddenHomeRows = p.hiddenHomeRows,
                 homeRowOrder = p.homeRowOrder,
                 streamingPlatforms = p.streamingPlatforms,
+                platformOpening = p.platformOpening,
             )
         }
     }

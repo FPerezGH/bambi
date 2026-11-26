@@ -131,6 +131,10 @@ class ProfileEditViewModel @Inject constructor(
         state.copy(profile = state.profile.copy(homeRowOrder = state.profile.homeRowOrder + (filter.name to order)))
     }
 
+    fun setPlatformOpening(mode: com.shieldstream.tv.model.PlatformOpening) = edit { state ->
+        state.copy(profile = state.profile.copy(platformOpening = mode))
+    }
+
     fun togglePlatform(id: String) = edit { state ->
         val current = state.profile.streamingPlatforms
         state.copy(profile = state.profile.copy(streamingPlatforms = if (id in current) current - id else current + id))
