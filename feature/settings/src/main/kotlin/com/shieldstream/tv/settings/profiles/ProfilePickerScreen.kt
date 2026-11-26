@@ -106,9 +106,12 @@ fun ProfilePickerScreen(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 32.dp),
         ) {
-            Image(painterResource(R.drawable.bambi_logo), contentDescription = "Bambi", modifier = Modifier.size(40.dp))
-            Spacer(Modifier.width(12.dp))
-            Image(painterResource(R.drawable.bambi_wordmark), contentDescription = null, modifier = Modifier.height(22.dp))
+            Image(
+                painter = painterResource(R.drawable.cinefran_logo),
+                contentDescription = "CINEFRAN",
+                modifier = Modifier.width(240.dp).height(80.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            )
         }
 
         Column(
