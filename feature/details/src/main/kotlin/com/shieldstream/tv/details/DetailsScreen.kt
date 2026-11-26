@@ -657,6 +657,7 @@ private fun MetaRow(details: CatalogDetails, state: DetailsUiState.Content) {
             )
             Spacer(Modifier.width(14.dp))
         }
+        TomatometerRating(item)
         item.year?.let {
             Text(it.toString(), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.width(14.dp))
