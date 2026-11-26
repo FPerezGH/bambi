@@ -159,7 +159,11 @@ class CatalogRepositoryImpl @Inject constructor(
 
     override suspend fun getFeatured(filter: HomeFilter): List<FeaturedItem> =
         if (kids) cachedFeatured("featured_kids_${filter.name}") { extras.kidsFeatured(filter) }
-        else cachedFeatured("featured_v2_${filter.name}_${com.shieldstream.tv.model.featuredWeek()}") { extras.featured(filter) }
+        else {
+            val base = cachedFeatured("featured_v3_${filter.name}_${com.shieldstream.tv.model.featuredWeek()}") { extras.featured(filter) }
+            val available = extras.subscriptionFeatured(filter, profiles.active.value.streamingPlatforms, base.map { it.item.key }.toSet())
+            base + listOfNotNull(available)
+        }
 
     override suspend fun getPersonalFeatured(filter: HomeFilter, history: List<Pair<MediaType, String>>, excluded: Set<String>): FeaturedItem? =
         if (kids || history.isEmpty()) null else extras.personalFeatured(profiles.active.value.id, filter, history, excluded)

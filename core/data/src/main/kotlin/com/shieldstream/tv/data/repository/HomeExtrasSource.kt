@@ -52,7 +52,7 @@ class HomeExtrasSource @Inject constructor(
 
     suspend fun featured(filter: HomeFilter): List<FeaturedItem> {
         val week = weekKey()
-        val prefKey = "week_v2_${filter.name}"
+        val prefKey = "week_v3_${filter.name}"
         val picks = readPicks(prefs.getString(prefKey, null), week) ?: choosePicks(filter, week, prefs.getString(prefKey, null)).also { picks ->
             if (picks.isNotEmpty()) prefs.edit().putString(prefKey, writePicks(week, picks)).apply()
         }
@@ -161,6 +161,8 @@ class HomeExtrasSource @Inject constructor(
         val popular = mapOf("sort_by" to "popularity.desc")
         val good = mapOf("vote_average.gte" to "6.5", "vote_count.gte" to "100")
         val rules = listOf(
+            Rule(FeaturedBadge.AUDIENCE_FAVORITE, mapOf("sort_by" to "vote_average.desc", "vote_average.gte" to "8", "vote_count.gte" to "5000"), mapOf("sort_by" to "vote_average.desc", "vote_average.gte" to "8", "vote_count.gte" to "1000")),
+            Rule(FeaturedBadge.SPANISH_CINEMA, popular + mapOf("with_origin_country" to "ES", "vote_average.gte" to "7", "vote_count.gte" to "50"), popular + mapOf("with_origin_country" to "ES", "vote_average.gte" to "7", "vote_count.gte" to "30")),
             Rule(FeaturedBadge.UPCOMING, mapOf("primary_release_date.gte" to tomorrow, "primary_release_date.lte" to future) + popular,
                 mapOf("first_air_date.gte" to tomorrow, "first_air_date.lte" to future) + popular),
             Rule(FeaturedBadge.WEEKEND, null, popular + good + ("with_runtime.lte" to "45")),
@@ -211,6 +213,58 @@ class HomeExtrasSource @Inject constructor(
             }
         }
         picks
+    }
+
+    suspend fun subscriptionFeatured(filter: HomeFilter, enabled: Set<String>, excluded: Set<String>): FeaturedItem? = coroutineScope {
+        if (enabled.isEmpty()) return@coroutineScope null
+        val week = weekKey()
+        val prefKey = "subscription_v1_${filter.name}_${enabled.sorted().joinToString("_")}"
+        val previous = prefs.getString(prefKey, null)
+        val cached = readPicks(previous, week)?.firstOrNull()
+        suspend fun verified(pick: Pick): FeaturedItem? {
+            val type = if (pick.type == MediaType.TV) "tv" else "movie"
+            val providers = try { tmdb.watchProviders(type, pick.id, key).results["ES"]?.flatrate.orEmpty() }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { return null }
+            if (providers.none { com.shieldstream.tv.model.StreamingPlatforms.id(it.provider_name) in enabled }) return null
+            val result = try { loadFeatured(pick) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { null }
+            return result?.takeIf { it.item.key !in excluded }
+        }
+        if (cached != null) verified(cached)?.let { return@coroutineScope it }
+        val types = when (filter) {
+            HomeFilter.ALL -> listOf(MediaType.MOVIE, MediaType.TV)
+            HomeFilter.MOVIES -> listOf(MediaType.MOVIE)
+            HomeFilter.TV -> listOf(MediaType.TV)
+        }
+        val pools = types.map { media -> async {
+            val type = if (media == MediaType.TV) "tv" else "movie"
+            try {
+                val ids = tmdb.providerList(type, key).results.filter {
+                    com.shieldstream.tv.model.StreamingPlatforms.id(it.provider_name) in enabled
+                }.map { it.provider_id }.distinct()
+                if (ids.isEmpty()) return@async emptyList<Pick>()
+                val params = mapOf("watch_region" to "ES", "with_watch_providers" to ids.joinToString("|"),
+                    "with_watch_monetization_types" to "flatrate", "include_adult" to "false",
+                    "sort_by" to "popularity.desc", "vote_average.gte" to "7", "vote_count.gte" to "100",
+                    (if (media == MediaType.TV) "first_air_date.lte" else "primary_release_date.lte") to isoDate(Date()))
+                if (media == MediaType.TV) tmdb.discoverTvQuery(key, params).results
+                    .filter { it.poster_path != null && it.backdrop_path != null }.map { Pick(media, it.id, FeaturedBadge.ON_YOUR_PLATFORMS) }
+                else tmdb.discoverMovieQuery(key, params).results
+                    .filter { it.poster_path != null && it.backdrop_path != null }.map { Pick(media, it.id, FeaturedBadge.ON_YOUR_PLATFORMS) }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { emptyList<Pick>() }
+        } }.awaitAll().flatten()
+        val old = previous?.split('|')?.getOrNull(1)
+        val candidates = pools.filter { "${it.type.name}:${it.id}:${it.badge.name}" != old }
+            .shuffled(kotlin.random.Random(week.hashCode()))
+        for (pick in candidates.take(8)) {
+            val result = verified(pick) ?: continue
+            prefs.edit().putString(prefKey, writePicks(week, listOf(pick))).apply()
+            return@coroutineScope result
+        }
+        null
     }
 
     suspend fun personalFeatured(profileId: String, filter: HomeFilter, history: List<Pair<MediaType, String>>, excluded: Set<String>): FeaturedItem? {

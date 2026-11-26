@@ -75,4 +75,7 @@
     <string name="featured_hidden_gem">Joyas ocultas</string>
     <string name="featured_classic">Clásicos imprescindibles</string>
     <string name="featured_because_watched">Porque viste</string>
+    <string name="featured_audience_favorite">Favoritas del público</string>
+    <string name="featured_spanish_cinema">Cine de aquí</string>
+    <string name="featured_on_your_platforms">Disponible en tus plataformas</string>
 </resources>

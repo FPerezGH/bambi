@@ -334,6 +334,9 @@ private fun badgeIcon(badge: FeaturedBadge): Pair<ImageVector, Color> = when (ba
     FeaturedBadge.HIDDEN_GEM -> AppIcons.Star to Color(0xFFFFC94A)
     FeaturedBadge.CLASSIC -> AppIcons.Star to Color(0xFFFFC94A)
     FeaturedBadge.BECAUSE_WATCHED -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.AUDIENCE_FAVORITE -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.SPANISH_CINEMA -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.ON_YOUR_PLATFORMS -> AppIcons.Tv to Color(0xFF4FA3FF)
 }
 
 /**

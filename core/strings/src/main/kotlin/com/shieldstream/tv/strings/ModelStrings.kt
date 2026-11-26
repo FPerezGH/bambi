@@ -63,6 +63,9 @@ val FeaturedBadge.labelResource: Int
         FeaturedBadge.HIDDEN_GEM -> R.string.featured_hidden_gem
         FeaturedBadge.CLASSIC -> R.string.featured_classic
         FeaturedBadge.BECAUSE_WATCHED -> R.string.featured_because_watched
+        FeaturedBadge.AUDIENCE_FAVORITE -> R.string.featured_audience_favorite
+        FeaturedBadge.SPANISH_CINEMA -> R.string.featured_spanish_cinema
+        FeaturedBadge.ON_YOUR_PLATFORMS -> R.string.featured_on_your_platforms
     }
 
 @get:StringRes

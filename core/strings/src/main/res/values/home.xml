@@ -75,4 +75,7 @@
     <string name="featured_hidden_gem">Hidden gems</string>
     <string name="featured_classic">Essential classics</string>
     <string name="featured_because_watched">Because you watched</string>
+    <string name="featured_audience_favorite">Audience favorites</string>
+    <string name="featured_spanish_cinema">Spanish cinema and TV</string>
+    <string name="featured_on_your_platforms">On your platforms</string>
 </resources>

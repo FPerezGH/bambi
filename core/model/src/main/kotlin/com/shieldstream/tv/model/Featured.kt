@@ -19,6 +19,9 @@ enum class FeaturedBadge {
     HIDDEN_GEM,
     CLASSIC,
     BECAUSE_WATCHED,
+    AUDIENCE_FAVORITE,
+    SPANISH_CINEMA,
+    ON_YOUR_PLATFORMS,
 }
 
 data class FeaturedItem(
