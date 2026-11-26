@@ -52,8 +52,8 @@ class HomeExtrasSource @Inject constructor(
 
     suspend fun featured(filter: HomeFilter): List<FeaturedItem> {
         val week = weekKey()
-        val prefKey = "week_${filter.name}"
-        val picks = readPicks(prefs.getString(prefKey, null), week) ?: choosePicks(filter).also { picks ->
+        val prefKey = "week_v2_${filter.name}"
+        val picks = readPicks(prefs.getString(prefKey, null), week) ?: choosePicks(filter, week, prefs.getString(prefKey, null)).also { picks ->
             if (picks.isNotEmpty()) prefs.edit().putString(prefKey, writePicks(week, picks)).apply()
         }
         return coroutineScope {
@@ -108,7 +108,7 @@ class HomeExtrasSource @Inject constructor(
         picks.map { pick -> async { runCatching { loadFeatured(pick) }.getOrNull() } }.awaitAll().filterNotNull()
     }
 
-    private suspend fun choosePicks(filter: HomeFilter): List<Pick> {
+    private suspend fun choosePicks(filter: HomeFilter, week: String, previous: String?): List<Pick> = coroutineScope {
         val trending = (tmdb.trendingAllWeek(key, 1).results + runCatching { tmdb.trendingAllWeek(key, 2).results }.getOrDefault(emptyList()))
             .filter { it.media_type == "movie" || it.media_type == "tv" }
             .filter { it.backdrop_path != null && it.poster_path != null }
@@ -120,7 +120,11 @@ class HomeExtrasSource @Inject constructor(
                 }
             }
             .distinctBy { it.media_type + it.id }
-        if (trending.isEmpty()) return emptyList()
+        val previousKeys = previous.orEmpty().split('|').drop(1).mapNotNull { token ->
+            val parts = token.split(':')
+            if (parts.size == 3) parts[0] + ":" + parts[1] else null
+        }.toSet()
+        val rotation = kotlin.random.Random(week.hashCode())
 
         val today = isoDate(Date())
         val recentLimit = isoDate(Date(System.currentTimeMillis() - 60L * 24 * 3600 * 1000))
@@ -131,8 +135,10 @@ class HomeExtrasSource @Inject constructor(
             picks += Pick(if (dto.media_type == "tv") MediaType.TV else MediaType.MOVIE, dto.id, badge)
         }
         fun dateOf(d: TmdbSearchResultDto) = (d.release_date ?: d.first_air_date).orEmpty()
-        fun unused(predicate: (TmdbSearchResultDto) -> Boolean) =
-            trending.firstOrNull { it.media_type + it.id !in used && predicate(it) }
+        fun unused(predicate: (TmdbSearchResultDto) -> Boolean): TmdbSearchResultDto? {
+            val pool = trending.filter { it.media_type + it.id !in used && predicate(it) }
+            return pool.firstOrNull { (if (it.media_type == "tv") "TV" else "MOVIE") + ":" + it.id !in previousKeys } ?: pool.firstOrNull()
+        }
 
         add(unused { dateOf(it) in recentLimit..today }, FeaturedBadge.NEW)
         add(unused { true }, FeaturedBadge.POPULAR)
@@ -147,7 +153,64 @@ class HomeExtrasSource @Inject constructor(
             trending.filter { it.media_type + it.id !in used && it.vote_count >= 300 }.maxByOrNull { it.vote_average },
             FeaturedBadge.ACCLAIMED,
         )
-        return picks.take(5)
+        data class Candidate(val pick: Pick, val date: String?, val popularity: Double)
+        data class Rule(val badge: FeaturedBadge, val movie: Map<String, String>?, val tv: Map<String, String>?)
+        val year = Calendar.getInstance().get(Calendar.YEAR)
+        val future = isoDate(Date(System.currentTimeMillis() + 30L * 86400000L))
+        val tomorrow = isoDate(Date(System.currentTimeMillis() + 86400000L))
+        val popular = mapOf("sort_by" to "popularity.desc")
+        val good = mapOf("vote_average.gte" to "6.5", "vote_count.gte" to "100")
+        val rules = listOf(
+            Rule(FeaturedBadge.UPCOMING, mapOf("primary_release_date.gte" to tomorrow, "primary_release_date.lte" to future) + popular,
+                mapOf("first_air_date.gte" to tomorrow, "first_air_date.lte" to future) + popular),
+            Rule(FeaturedBadge.WEEKEND, null, popular + good + ("with_runtime.lte" to "45")),
+            Rule(FeaturedBadge.RELAX, popular + good + mapOf("with_genres" to "35|12", "without_genres" to "27|53"), popular + good + ("with_genres" to "35")),
+            Rule(FeaturedBadge.ADRENALINE, popular + good + ("with_genres" to "28|53"), popular + good + ("with_genres" to "10759|80")),
+            Rule(FeaturedBadge.THINK, popular + good + ("with_genres" to "18|878|9648"), popular + good + ("with_genres" to "18|10765|9648")),
+            Rule(FeaturedBadge.SHORT, popular + good + mapOf("with_runtime.gte" to "60", "with_runtime.lte" to "89"), null),
+            Rule(FeaturedBadge.MINISERIES, null, popular + good + ("with_type" to "2")),
+            Rule(FeaturedBadge.FAMILY, popular + mapOf("with_genres" to "10751", "certification_country" to "US", "certification.lte" to "PG"), popular + ("with_genres" to "10762")),
+            Rule(FeaturedBadge.HIDDEN_GEM, mapOf("sort_by" to "vote_average.desc", "vote_average.gte" to "7.5", "vote_count.gte" to "100", "vote_count.lte" to "500"), mapOf("sort_by" to "vote_average.desc", "vote_average.gte" to "7.5", "vote_count.gte" to "50", "vote_count.lte" to "300")),
+            Rule(FeaturedBadge.CLASSIC, mapOf("sort_by" to "vote_average.desc", "primary_release_date.lte" to "${year - 25}-12-31", "vote_average.gte" to "8", "vote_count.gte" to "500"), mapOf("sort_by" to "vote_average.desc", "first_air_date.lte" to "${year - 20}-12-31", "vote_average.gte" to "8", "vote_count.gte" to "300"))
+        )
+        val pools = rules.map { rule -> async {
+            val candidates = mutableListOf<Candidate>()
+            if (filter != HomeFilter.TV && rule.movie != null) {
+                val result = runCatching { tmdb.discoverMovieQuery(key, rule.movie + mapOf("include_adult" to "false", "page" to "1")) }.getOrNull()
+                result?.results.orEmpty().filter { it.backdrop_path != null && it.poster_path != null }.forEach {
+                    candidates += Candidate(Pick(MediaType.MOVIE, it.id, rule.badge), it.release_date, it.popularity)
+                }
+            }
+            if (filter != HomeFilter.MOVIES && rule.tv != null) {
+                val result = runCatching { tmdb.discoverTvQuery(key, rule.tv + mapOf("include_adult" to "false", "page" to "1")) }.getOrNull()
+                result?.results.orEmpty().filter { it.backdrop_path != null && it.poster_path != null }.forEach {
+                    candidates += Candidate(Pick(MediaType.TV, it.id, rule.badge), it.first_air_date, it.popularity)
+                }
+            }
+            rule to candidates
+        } }.awaitAll()
+        add(unused { true }, FeaturedBadge.BUZZ)
+        for ((rule, candidates) in pools) {
+            val fresh = candidates.filter { c ->
+                val p = c.pick
+                val key = (if (p.type == MediaType.TV) "tv" else "movie") + p.id
+                key !in used && "${p.type.name}:${p.id}" !in previousKeys &&
+                    (rule.badge == FeaturedBadge.UPCOMING || c.date.orEmpty() in "1900-01-01"..today)
+            }.shuffled(rotation)
+            for (candidate in fresh.take(8)) {
+                val p = candidate.pick
+                if (rule.badge == FeaturedBadge.MINISERIES || rule.badge == FeaturedBadge.WEEKEND) {
+                    val d = runCatching { tmdb.tvDetails(p.id, key) }.getOrNull() ?: continue
+                    val episodes = d.seasons.filter { it.season_number > 0 }.sumOf { it.episode_count }
+                    if (episodes !in 1..10 || d.number_of_seasons != 1) continue
+                    if (rule.badge == FeaturedBadge.MINISERIES && d.status !in listOf("Ended", "Canceled")) continue
+                }
+                val k = (if (p.type == MediaType.TV) "tv" else "movie") + p.id
+                if (used.add(k)) picks += p
+                break
+            }
+        }
+        picks
     }
 
     private suspend fun loadFeatured(pick: Pick): FeaturedItem? {

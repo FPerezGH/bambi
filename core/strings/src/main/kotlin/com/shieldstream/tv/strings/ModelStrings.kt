@@ -51,6 +51,17 @@ val FeaturedBadge.labelResource: Int
         FeaturedBadge.MOVIE_NOW -> R.string.featured_movie_now
         FeaturedBadge.RISING -> R.string.featured_rising
         FeaturedBadge.ACCLAIMED -> R.string.featured_acclaimed
+        FeaturedBadge.BUZZ -> R.string.featured_buzz
+        FeaturedBadge.UPCOMING -> R.string.featured_upcoming
+        FeaturedBadge.WEEKEND -> R.string.featured_weekend
+        FeaturedBadge.RELAX -> R.string.featured_relax
+        FeaturedBadge.ADRENALINE -> R.string.featured_adrenaline
+        FeaturedBadge.THINK -> R.string.featured_think
+        FeaturedBadge.SHORT -> R.string.featured_short
+        FeaturedBadge.MINISERIES -> R.string.featured_miniseries
+        FeaturedBadge.FAMILY -> R.string.featured_family
+        FeaturedBadge.HIDDEN_GEM -> R.string.featured_hidden_gem
+        FeaturedBadge.CLASSIC -> R.string.featured_classic
     }
 
 @get:StringRes

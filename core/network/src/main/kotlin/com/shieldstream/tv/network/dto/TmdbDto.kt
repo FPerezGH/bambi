@@ -159,6 +159,8 @@ data class TmdbTvDetailDto(
     val translations: TmdbTranslationsDto? = null,
     val content_ratings: TmdbContentRatingsDto? = null,
     val number_of_seasons: Int = 0,
+    val status: String? = null,
+    val type: String? = null,
     val original_language: String? = null,
     val last_episode_to_air: TmdbEpisodeDto? = null,
     val next_episode_to_air: TmdbEpisodeDto? = null,

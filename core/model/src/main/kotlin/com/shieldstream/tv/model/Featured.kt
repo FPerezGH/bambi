@@ -7,6 +7,17 @@ enum class FeaturedBadge {
     MOVIE_NOW,
     RISING,
     ACCLAIMED,
+    BUZZ,
+    UPCOMING,
+    WEEKEND,
+    RELAX,
+    ADRENALINE,
+    THINK,
+    SHORT,
+    MINISERIES,
+    FAMILY,
+    HIDDEN_GEM,
+    CLASSIC,
 }
 
 data class FeaturedItem(

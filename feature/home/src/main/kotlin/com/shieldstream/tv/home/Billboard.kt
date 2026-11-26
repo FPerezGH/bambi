@@ -318,6 +318,17 @@ private fun badgeIcon(badge: FeaturedBadge): Pair<ImageVector, Color> = when (ba
     FeaturedBadge.SERIES_NOW -> AppIcons.Tv to Color(0xFF4FA3FF)
     FeaturedBadge.MOVIE_NOW -> AppIcons.Movie to Color(0xFF4FA3FF)
     FeaturedBadge.ACCLAIMED -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.BUZZ -> AppIcons.Trending to Color(0xFFFFC94A)
+    FeaturedBadge.UPCOMING -> AppIcons.Bolt to Color(0xFFFFC94A)
+    FeaturedBadge.WEEKEND -> AppIcons.Tv to Color(0xFFFFC94A)
+    FeaturedBadge.RELAX -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.ADRENALINE -> AppIcons.Bolt to Color(0xFFFFC94A)
+    FeaturedBadge.THINK -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.SHORT -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.MINISERIES -> AppIcons.Tv to Color(0xFFFFC94A)
+    FeaturedBadge.FAMILY -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.HIDDEN_GEM -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.CLASSIC -> AppIcons.Star to Color(0xFFFFC94A)
 }
 
 /**

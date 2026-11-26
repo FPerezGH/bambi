@@ -304,16 +304,30 @@ class CatalogRepositoryImpl @Inject constructor(
             params["with_watch_providers"] = ids.joinToString("|")
             params["with_watch_monetization_types"] = "flatrate"
         }
-        val topicWords = searchTopics(normalized)
+        val country = linkedMapOf("espanol" to "ES", "frances" to "FR", "francesa" to "FR",
+            "britanic" to "GB", "ingles" to "GB", "estadounidense" to "US", "american" to "US",
+            "italian" to "IT", "aleman" to "DE", "japones" to "JP", "corean" to "KR",
+            "mexican" to "MX", "argentin" to "AR", "indio" to "IN", "canadiense" to "CA")
+            .entries.firstOrNull { normalized.contains(it.key) }?.value
+        val language = Regex("\\ben (castellano|espanol|ingles|frances|italiano|aleman)\\b").find(normalized)
+            ?.groupValues?.get(1)?.let { mapOf("castellano" to "es", "espanol" to "es", "ingles" to "en", "frances" to "fr", "italiano" to "it", "aleman" to "de")[it] }
+        if (country != null && language == null) params["with_origin_country"] = country
+        if (language != null) params["with_original_language"] = language
+        if (country != null || language != null) params["vote_count.gte"] = if (series) "10" else "20"
+        val duration = Regex("(?:menos de|inferior a)\\s*(\\d+)\\s*(?:minutos|min)\\b").find(normalized)?.groupValues?.get(1)?.toIntOrNull()
+        if (!series && duration != null) params["with_runtime.lte"] = (duration - 1).coerceAtLeast(1).toString()
+        val topicWords = searchTopics(normalized
+            .replace(Regex("\\b(espanol(?:a|es|as)?|frances(?:a|es|as)?|britanic[oa]s?|ingles(?:a|es|as)?|estadounidenses?|american[oa]s?|italian[oa]s?|aleman(?:a|es|as)?|japones(?:a|es|as)?|corean[oa]s?|mexican[oa]s?|argentin[oa]s?|indi[oa]s?|canadienses?|castellano)\\b"), " ")
+            .replace(Regex("(?:menos de|inferior a)\\s*\\d+\\s*(?:minutos|min)\\b"), " "))
         val keywords = topicWords.flatMap { term ->
             try { tmdb.searchKeyword(key, term).results.filter { normalizeSearch(it.name) == term }.map { it.id } }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { emptyList() }
         }.distinct()
-        val hasCriteria = genre != null || rating > 0 || filters.year > 0 || decade != null || provider.isNotBlank()
+        val hasCriteria = genre != null || rating > 0 || filters.year > 0 || decade != null || provider.isNotBlank() || country != null || language != null || duration != null
         val items = mutableListOf<CatalogItem>()
         // Direct matches remain available even if an optional keyword service fails.
-        if (q.isNotEmpty()) {
+        if (q.isNotEmpty() && country == null && language == null && duration == null) {
             val candidates = try { allTitleResults(q) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
             for (dto in candidates) {
                 if (dto.media_type != type || (genre != null && genre !in dto.genre_ids)) continue
