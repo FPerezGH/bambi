@@ -210,6 +210,8 @@ private fun SettingsList(
                     modifier = Modifier.padding(start = 4.dp, top = 2.dp),
                 )
             }
+            item { SectionTitle("Integraciones") }
+            item { TraktConfigurationCard() }
             item { SectionTitle(localizedStringResource(StringsR.string.settings_other_services)) }
             items(otherServices, key = { it.service.name }) { ui ->
                 ServiceCard(

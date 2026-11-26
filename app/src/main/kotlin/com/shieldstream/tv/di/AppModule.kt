@@ -29,6 +29,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideTraktCredentials(): TraktCredentials =
-        TraktCredentials(BuildConfig.TRAKT_CLIENT_ID, BuildConfig.TRAKT_CLIENT_SECRET, BuildConfig.TRAKT_REDIRECT_URI)
+    fun provideTraktCredentials(store: com.shieldstream.tv.data.security.TokenStore): TraktCredentials =
+        TraktCredentials(BuildConfig.TRAKT_CLIENT_ID, BuildConfig.TRAKT_CLIENT_SECRET, BuildConfig.TRAKT_REDIRECT_URI) {
+            store.getSecret("trakt_app_credentials")?.let { raw ->
+                val parts = raw.split(':', limit = 2)
+                parts[0] to parts.getOrElse(1) { "" }
+            }
+        }
 }

@@ -70,7 +70,26 @@ class TraktRepositoryImpl @Inject constructor(
     @Volatile private var lastSyncAttempt = 0L
 
     override val isConfigured: Boolean get() = credentials.isConfigured
-    override val isConnected: Boolean get() = session(profiles.active.value.id) != null
+    override val isConnected: Boolean get() = isConfigured && session(profiles.active.value.id) != null
+
+    override fun configuredClientId(): String = credentials.clientId
+
+    override suspend fun configureApplication(clientId: String, clientSecret: String): Result<Unit> = runCatching {
+        val id = clientId.trim()
+        val secret = clientSecret.trim()
+        require(!profiles.active.value.kids) { "Solo un perfil adulto puede configurar Trakt." }
+        require(id.isEmpty() || id.matches(Regex("[A-Za-z0-9_-]{16,128}"))) { "Client ID no válido." }
+        require(secret.isEmpty() || secret.matches(Regex("[A-Za-z0-9_-]{16,128}"))) { "Client Secret no válido." }
+        require(id.isNotEmpty() || secret.isEmpty()) { "Introduce primero el Client ID." }
+        if (id == credentials.clientId && secret == credentials.clientSecret) return@runCatching
+        // Changing OAuth applications invalidates all existing profile authorizations.
+        syncMutex.withLock {
+            profiles.profiles.value.toList().forEach { forget(it.id) }
+            tokens.setSecret("trakt_app_credentials", "$id:$secret")
+            playbackIds.clear()
+            lastSyncAttempt = 0L
+        }
+    }
 
     init {
         scope.launch {
@@ -560,6 +579,7 @@ class TraktRepositoryImpl @Inject constructor(
 
     private suspend fun validToken(profileId: String): String? = tokenLocks.getOrPut(profileId) { Mutex() }.withLock {
         // Otro pudo renovar mientras esperábamos: se vuelve a leer ya dentro del candado.
+        if (!isConfigured) return@withLock null
         val s = session(profileId) ?: return@withLock null
         if (s.expiresAt - System.currentTimeMillis() > REFRESH_MARGIN_MS) return@withLock s.accessToken
         val response = runCatching {

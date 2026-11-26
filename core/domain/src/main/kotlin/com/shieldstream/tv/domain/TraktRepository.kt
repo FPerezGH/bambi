@@ -2,11 +2,15 @@ package com.shieldstream.tv.domain
 
 import com.shieldstream.tv.model.MediaType
 
-data class TraktCredentials(
-    val clientId: String,
-    val clientSecret: String = "",
+class TraktCredentials(
+    clientId: String,
+    clientSecret: String = "",
     val redirectUri: String = "urn:ietf:wg:oauth:2.0:oob",
+    private val readOverride: (() -> Pair<String, String>?)? = null,
 ) {
+    private val defaults = clientId to clientSecret
+    val clientId: String get() = (readOverride?.invoke() ?: defaults).first
+    val clientSecret: String get() = (readOverride?.invoke() ?: defaults).second
     val isConfigured: Boolean get() = clientId.isNotBlank()
 }
 
@@ -38,6 +42,8 @@ sealed interface TraktRatingTarget {
 interface TraktRepository {
     val isConfigured: Boolean
     val isConnected: Boolean
+    fun configuredClientId(): String = ""
+    suspend fun configureApplication(clientId: String, clientSecret: String): Result<Unit> = Result.failure(UnsupportedOperationException())
 
     suspend fun requestDeviceCode(): Result<TraktDeviceCode>
 
