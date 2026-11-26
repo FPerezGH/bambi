@@ -59,7 +59,7 @@ class PortableBackupImpl @Inject constructor(
     private fun names(ids: List<String>): Set<String> = setOf("settings", "profiles") + ids.flatMap { id ->
         listOf(if (id == "default") "watch_progress" else "watch_progress_$id", "my_list_$id", "episode_tracking_$id")
     }
-    private val secretNames = ApiService.entries.map(TokenStore::keyNameFor) + "trakt_app_credentials"
+    private val secretNames = ApiService.entries.map { TokenStore.keyNameFor(it) } + "trakt_app_credentials"
 
     override fun export(password: CharArray): ByteArray {
         check(allowed)
@@ -91,15 +91,20 @@ class PortableBackupImpl @Inject constructor(
         // Trakt OAuth sessions are device-local; reconnect after restore, keep local history.
         for (i in 0 until stored.length()) stored.getJSONObject(i).remove("traktUser")
         profileValues["list"] = stored.toString()
-        require(profileValues["active"] == null || profileValues["active"] in ids)
+        val active = profileValues["active"] as? String
+        require(profileValues["active"] == null || active != null && active in ids)
         val credentials = root.getJSONObject("credentials")
         require(credentials.keys().asSequence().toSet() == secretNames.toSet())
         val newSecrets = secretNames.associateWith { name -> if (credentials.isNull(name)) null else credentials.getString(name).also { require(it.length <= 131072) } }
-        val previous = decoded.keys.associateWith { pref(it).all.toMap() }
-        val oldSecrets = secretNames.associateWith(tokens::getSecret)
+        val affectedProfiles = (ids + profiles.profiles.value.map { it.id }).distinct()
+        val clearedSessions = affectedProfiles.associate { "trakt_$it" to null }
+        val allSecrets = newSecrets + clearedSessions
+        val previous = (decoded.keys + "trakt_sync").associateWith { pref(it).all.toMap() }
+        val oldSecrets = allSecrets.keys.associateWith { tokens.getSecret(it) }
         try {
             decoded.forEach { (name, values) -> write(pref(name), if (name == "profiles") profileValues else values) }
-            tokens.restoreSecrets(newSecrets)
+            write(pref("trakt_sync"), emptyMap<String, Any>())
+            tokens.restoreSecrets(allSecrets)
         } catch (e: Exception) {
             previous.forEach { (name, values) -> runCatching { write(pref(name), values) } }
             runCatching { tokens.restoreSecrets(oldSecrets) }

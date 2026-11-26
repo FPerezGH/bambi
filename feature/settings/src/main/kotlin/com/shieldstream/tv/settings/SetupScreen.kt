@@ -283,6 +283,7 @@ private fun ColumnScope.WelcomeStep(onStart: () -> Unit, onLater: () -> Unit, on
             }
             TvButton(text = localizedStringResource(SR.setup_start), onClick = onStart, modifier = Modifier.focusRequester(startRequester))
             TvButton(text = localizedStringResource(SR.setup_later), onClick = onLater)
+            PortableBackupCard(compact = true)
         }
     }
 }

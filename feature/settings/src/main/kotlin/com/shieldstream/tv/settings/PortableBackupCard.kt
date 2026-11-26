@@ -35,7 +35,7 @@ interface BackupEntryPoint {
 }
 
 @Composable
-internal fun PortableBackupCard() {
+internal fun PortableBackupCard(compact: Boolean = false) {
     val context = LocalContext.current
     val backup = remember(context) { runCatching { EntryPointAccessors.fromApplication(context.applicationContext, BackupEntryPoint::class.java).portableBackup() }.getOrNull() }
     if (backup == null || !backup.allowed) return
@@ -90,7 +90,8 @@ internal fun PortableBackupCard() {
             }
         }
     }
-    FocusCard(onClick = { open = true; message = "" }) { _ ->
+    if (compact) TvButton(text = "Restaurar copia", onClick = { open = true; message = "" })
+    else FocusCard(onClick = { open = true; message = "" }) { _ ->
         Column {
             Text("Copia de seguridad", color = Color.White, style = MaterialTheme.typography.titleLarge)
             Text("Exportar o restaurar perfiles, listas, historial, preferencias y claves API con contraseña.", color = SettingsMuted)
