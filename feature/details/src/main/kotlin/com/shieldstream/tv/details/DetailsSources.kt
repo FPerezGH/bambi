@@ -1,5 +1,7 @@
 package com.shieldstream.tv.details
 
+import kotlinx.coroutines.launch
+
 import com.shieldstream.tv.ui.theme.AppColors
 import com.shieldstream.tv.strings.R as StringsR
 import com.shieldstream.tv.strings.localizedStringResource
@@ -126,6 +128,7 @@ internal fun SourcesPanel(
 ) {
     val firstRequester = remember { FocusRequester() }
     val official = state.details.officialProviders
+    val officialScope = androidx.compose.runtime.rememberCoroutineScope()
     val context = LocalContext.current
     var officialError by remember { mutableStateOf<String?>(null) }
     val allSources = (state.sources as? SourcesState.Ready)?.sources.orEmpty().filter { !it.isMarkedBroken(state.brokenSources) }
@@ -222,15 +225,10 @@ internal fun SourcesPanel(
                                 .onFocusChanged { focused = it.isFocused }
                                 .tvClickable(onClick = {
                                     officialError = null
-                                    val url = provider.availabilityUrl
-                                    if (url == null) {
-                                        officialError = "No hay enlace de disponibilidad."
-                                    } else {
-                                        try {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        } catch (_: Exception) {
-                                            officialError = "No hay una aplicación que pueda abrir este enlace."
-                                        }
+                                    officialScope.launch {
+                                        officialError = openOfficialPlatform(context,
+                                            com.shieldstream.tv.model.StreamingPlatforms.id(provider.name).orEmpty(),
+                                            state.details.item, provider.availabilityUrl, state.details.platformOpening)
                                     }
                                 })
                                 .padding(horizontal = 16.dp, vertical = 10.dp),

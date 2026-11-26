@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -82,6 +83,14 @@ fun SearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
+    val configuredPageSize by viewModel.pageSize.collectAsStateWithLifecycle()
+    val filters by viewModel.filters.collectAsStateWithLifecycle()
+    var filtersOpen by remember { mutableStateOf(false) }
+    if (filtersOpen) SearchFiltersDialog(filters, { viewModel.setFilters(it); filtersOpen = false }, { filtersOpen = false })
+    var orderMode by rememberSaveable { mutableStateOf("recommended") }
+    var carouselMode by rememberSaveable { mutableStateOf(true) }
+    var orderYear by rememberSaveable { mutableStateOf(0) }
+    var page by rememberSaveable(query, orderMode, orderYear, configuredPageSize, filters.toString()) { mutableStateOf(0) }
     var lockedPick by remember { mutableStateOf<CatalogItem?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -107,6 +116,8 @@ fun SearchScreen(
     val firstKey = remember { FocusRequester() }
     val layoutKey = remember { FocusRequester() }
     val cardRequester = remember { FocusRequester() }
+    val firstResultRequester = remember { FocusRequester() }
+    var keyboardVisible by rememberSaveable { mutableStateOf(true) }
     var lastCardKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -141,7 +152,7 @@ fun SearchScreen(
     }
 
     Row(Modifier.fillMaxSize().background(Color.Black)) {
-        Column(
+        if (keyboardVisible || !carouselMode || state !is SearchUiState.Results) Column(
             Modifier
                 .width(if (qwerty) 452.dp else 330.dp)
                 .fillMaxHeight()
@@ -204,6 +215,7 @@ fun SearchScreen(
                 onClear = viewModel::clear,
                 onToggleLayout = viewModel::toggleKeyboardLayout,
                 onSystemKeyboard = { systemKeyboard = true },
+                onResults = { runCatching { firstResultRequester.requestFocus() }.getOrDefault(false) },
             )
         }
 
@@ -215,20 +227,71 @@ fun SearchScreen(
                 is SearchUiState.Empty -> localizedStringResource(StringsR.string.home_no_results_for, s.query)
                 is SearchUiState.Error -> s.message
             }
-            Text(
-                text = header,
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
-            )
-            val items = when (val s = state) {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = header,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f),
+                )
+                KeyButton(width = 94.dp, onClick = { if (keyboardVisible || !carouselMode) { carouselMode = true; keyboardVisible = false } else { carouselMode = false; keyboardVisible = true } }) {
+                    Text(if (carouselMode && !keyboardVisible) "Cuadrícula" else "Carrusel", color = it, style = MaterialTheme.typography.bodySmall)
+                }
+                KeyButton(width = 90.dp, onClick = { filtersOpen = true }) { Text("Filtros", color = it) }
+                CatalogOrderControl(orderMode, orderYear, { orderMode = it }, { orderYear = it })
+            }
+            val originalItems = when (val s = state) {
                 is SearchUiState.Suggestions -> s.items
                 is SearchUiState.Results -> s.items
                 else -> emptyList()
             }
+            val sortedItems = remember(originalItems, orderMode, orderYear) {
+                orderCatalogItems(originalItems, orderMode, orderYear)
+            }
+            val allItems = sortedItems.take(500)
+            if (originalItems.isNotEmpty() && allItems.isEmpty()) {
+                Text("No hay títulos para el año seleccionado", color = Color.White,
+                    modifier = Modifier.padding(12.dp))
+            }
             val results = state as? SearchUiState.Results
-            val locked = results?.locked.orEmpty()
+            val sortedLocked = orderCatalogItems(results?.locked.orEmpty(), orderMode, orderYear)
+            val allLocked = sortedLocked.take((500 - allItems.size).coerceAtLeast(0))
             val pending = results?.pending.orEmpty()
+            val pageSize = configuredPageSize.coerceIn(10, 100)
+            val total = allItems.size + allLocked.size
+            if (sortedItems.size + sortedLocked.size > 500) {
+                Text("Mostrando los primeros 500 resultados según el orden seleccionado", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp))
+            }
+            val pages = ((total + pageSize - 1) / pageSize).coerceAtLeast(1)
+            val currentPage = page.coerceIn(0, pages - 1)
+            val start = currentPage * pageSize
+            val end = (start + pageSize).coerceAtMost(total)
+            val items = allItems.drop(start).take(pageSize)
+            val locked = allLocked.drop((start - allItems.size).coerceAtLeast(0))
+                .take((end - maxOf(start, allItems.size)).coerceAtLeast(0))
+            val gridState = rememberLazyGridState()
+            fun changePage(next: Int) {
+                page = next.coerceIn(0, pages - 1)
+                lastCardKey = null
+            }
+            LaunchedEffect(currentPage) {
+                if (gridState.layoutInfo.totalItemsCount > 0) gridState.scrollToItem(0)
+            }
+            if (pages > 1) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (currentPage > 0) KeyButton(width = 136.dp, onClick = { changePage(currentPage - 1) }) {
+                        Text("‹ Anterior", color = it)
+                    }
+                    Text("Página ${currentPage + 1}/$pages · ${start + 1}–$end de $total",
+                        color = Color.White, style = MaterialTheme.typography.bodySmall)
+                    if (currentPage < pages - 1) KeyButton(width = 136.dp, onClick = { changePage(currentPage + 1) }) {
+                        Text("Siguiente ›", color = it)
+                    }
+                }
+            }
             notice?.let { message ->
                 Text(
                     text = message,
@@ -241,7 +304,24 @@ fun SearchScreen(
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                 )
             }
-            LazyVerticalGrid(
+            if (carouselMode && !keyboardVisible && items.isNotEmpty() && locked.isEmpty()) {
+                val rows = remember(items) {
+                    listOf(com.shieldstream.tv.model.CatalogRow("search_page", "Resultados", items))
+                }
+                Box(Modifier.fillMaxSize()) {
+                    androidx.compose.runtime.key(currentPage, query, orderMode, orderYear) {
+                        RowsBrowserContent(
+                            rows = rows,
+                            onItemClick = onItemClick,
+                            onRemoveContinue = {},
+                            onRemoveMyList = {},
+                            onExitTop = { keyboardVisible = true },
+                            onBack = { keyboardVisible = true },
+                        )
+                    }
+                }
+            } else LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Adaptive(118.dp),
                 contentPadding = PaddingValues(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -254,7 +334,8 @@ fun SearchScreen(
                         onClick = { onItemClick(item) },
                         onFocused = { lastCardKey = item.key },
                         width = 118.dp,
-                        modifier = if (item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier,
+                        modifier = Modifier.then(if (item.key == items.firstOrNull()?.key) Modifier.focusRequester(firstResultRequester) else Modifier)
+                            .then(if (item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier),
                     )
                 }
                 if (locked.isNotEmpty()) {
@@ -279,7 +360,8 @@ fun SearchScreen(
                             onClick = { if (!asked) lockedPick = item },
                             onFocused = { lastCardKey = "locked_" + item.key },
                             width = 118.dp,
-                            modifier = if ("locked_" + item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier,
+                            modifier = Modifier.then(if (items.isEmpty() && item.key == locked.firstOrNull()?.key) Modifier.focusRequester(firstResultRequester) else Modifier)
+                                .then(if ("locked_" + item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier),
                             overlay = { LockedOverlay(asked) },
                         )
                     }
@@ -299,6 +381,7 @@ private fun OnScreenKeyboard(
     onClear: () -> Unit,
     onToggleLayout: () -> Unit,
     onSystemKeyboard: () -> Unit,
+    onResults: () -> Boolean,
 ) {
     var toggled by remember { mutableStateOf(false) }
     LaunchedEffect(qwerty) {
@@ -314,7 +397,10 @@ private fun OnScreenKeyboard(
         rows.forEachIndexed { rowIndex, rowKeys ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 rowKeys.forEachIndexed { colIndex, c ->
-                    val mod = if (rowIndex == 0 && colIndex == 0) Modifier.focusRequester(firstKeyRequester) else Modifier
+                    val mod = (if (rowIndex == 0 && colIndex == 0) Modifier.focusRequester(firstKeyRequester) else Modifier)
+                        .then(if (colIndex == rowKeys.lastIndex) Modifier.onPreviewKeyEvent { event ->
+                            event.key == Key.DirectionRight && event.type == KeyEventType.KeyDown && onResults()
+                        } else Modifier)
                     KeyButton(width = keyWidth, onClick = { onChar(c) }, modifier = mod) {
                         Text(c.uppercase(), style = MaterialTheme.typography.titleMedium, color = it)
                     }
@@ -392,5 +478,94 @@ private fun androidx.compose.foundation.layout.BoxScope.LockedOverlay(asked: Boo
             color = Color.White,
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
         )
+    }
+}
+
+@Composable
+private fun SearchFiltersDialog(
+    current: com.shieldstream.tv.domain.CatalogSearchFilters,
+    onApply: (com.shieldstream.tv.domain.CatalogSearchFilters) -> Unit,
+    onClose: () -> Unit,
+) {
+    var draft by remember { mutableStateOf(current) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { withFrameNanos { }; runCatching { first.requestFocus() } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(760.dp).background(Color(0xFF1C1C1F), RoundedCornerShape(16.dp)).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Filtros de búsqueda", color = Color.White, style = MaterialTheme.typography.titleLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyButton(150.dp, { draft = draft.copy(series = false, all = true) }, Modifier.focusRequester(first)) { Text(if (draft.all && !draft.series) "✓ Todos" else "Todos", color = it) }
+                KeyButton(150.dp, { draft = draft.copy(series = false, all = false) }) { Text(if (!draft.all && !draft.series) "✓ Películas" else "Películas", color = it) }
+                KeyButton(150.dp, { draft = draft.copy(series = true, all = false) }) { Text(if (draft.series) "✓ Series" else "Series", color = it) }
+            }
+            val genres = listOf("" to "Todos", "comedia" to "Comedia", "accion" to "Acción", "drama" to "Drama", "ciencia ficcion" to "Ciencia ficción", "terror" to "Terror", "animacion" to "Animación", "documental" to "Documental", "aventura" to "Aventura", "crimen" to "Crimen", "fantasia" to "Fantasía", "misterio" to "Misterio", "romance" to "Romance", "thriller" to "Suspense", "familia" to "Familia", "western" to "Western", "guerra" to "Guerra", "historia" to "Historia", "musica" to "Música")
+            SearchFilterPicker("Género", genres, draft.genre) { draft = draft.copy(genre = it) }
+            val ratings = listOf(0, 5, 6, 7, 8, 9, 10)
+            SearchFilterPicker("Nota mínima", ratings.map { it to if (it == 0) "Todas" else "$it o superior" }, draft.minRating) { draft = draft.copy(minRating = it) }
+            val providers = listOf("" to "Todas las fuentes") + com.shieldstream.tv.model.StreamingPlatforms.labels.entries.map { it.key to it.value } + listOf("stremio" to "Stremio (catálogo general)")
+            SearchFilterPicker("Plataforma", providers, draft.platform) { draft = draft.copy(platform = it) }
+            var period by remember { mutableStateOf(5) }
+            val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+            val selected = draft.years + listOfNotNull(draft.year.takeIf { it > 0 })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (mode in listOf(1, 5, 10)) {
+                    KeyButton(135.dp, { period = mode }) {
+                        Text((if (mode == period) "✓ " else "") + if (mode == 1) "Años" else "$mode años", color = it)
+                    }
+                }
+                KeyButton(135.dp, { draft = draft.copy(year = 0, years = emptySet()) }) { Text("Todos los años", color = it) }
+            }
+            Text(if (selected.isEmpty()) "Todos los años" else "${selected.size} años seleccionados", color = Color.White)
+            val ranges = remember(period, currentYear) {
+                generateSequence(currentYear - currentYear % period) { it - period }.takeWhile { it >= 1900 }
+                    .map { it..minOf(it + period - 1, currentYear) }.toList()
+            }
+            LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.height(124.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(ranges, key = { it.first }) { range ->
+                    val checked = range.all { it in selected }
+                    val partial = !checked && range.any { it in selected }
+                    KeyButton(160.dp, {
+                        draft = draft.copy(year = 0, years = if (checked) selected - range.toSet() else selected + range.toSet())
+                    }) { color ->
+                        Text((if (checked) "✓ " else if (partial) "◐ " else "") +
+                            if (period == 1) range.first.toString() else "${range.first}–${range.last}", color = color)
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                KeyButton(130.dp, { draft = com.shieldstream.tv.domain.CatalogSearchFilters() }) { Text("Limpiar", color = it) }
+                KeyButton(130.dp, { onApply(draft) }) { Text("Aplicar", color = it) }
+                KeyButton(130.dp, onClose) { Text("Cancelar", color = it) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> SearchFilterPicker(label: String, options: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val requester = remember { FocusRequester() }
+    var restore by remember { mutableStateOf(false) }
+    LaunchedEffect(open) {
+        if (!open && restore) {
+            withFrameNanos { }
+            runCatching { requester.requestFocus() }
+            restore = false
+        }
+    }
+    KeyButton(460.dp, { restore = true; open = true }, Modifier.focusRequester(requester)) { color ->
+        Text("$label: " + (options.firstOrNull { it.first == selected }?.second ?: "Todos") + "  ▾", color = color,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    if (open) {
+        ActionMenuDialog(title = label, onDismiss = { open = false }, actions = options.map { (value, name) ->
+            ActionMenuItem((if (selected == value) "✓ " else "") + name, null) {
+                onSelected(value)
+                open = false
+            }
+        })
     }
 }

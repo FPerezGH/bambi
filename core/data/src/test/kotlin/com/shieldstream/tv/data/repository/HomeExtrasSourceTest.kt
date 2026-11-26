@@ -62,7 +62,7 @@ class HomeExtrasSourceTest {
         val rows = source.categoryRows(Category.CLASSICS, HomeFilter.MOVIES)
 
         assertEquals(3, rows.size)
-        assertEquals(listOf("1", "2", "3"), queries.map { it.getValue("page") }.sorted())
+        assertEquals(listOf("1", "4", "7"), queries.map { it.getValue("page") }.sorted())
         queries.forEach { query ->
             assertEquals("false", query["include_adult"])
             assertEquals("popularity.desc", query["sort_by"])

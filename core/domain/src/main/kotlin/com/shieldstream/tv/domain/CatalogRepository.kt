@@ -17,6 +17,8 @@ interface CatalogRepository {
 
     suspend fun getFeatured(filter: HomeFilter): List<FeaturedItem>
 
+    suspend fun getPersonalFeatured(filter: HomeFilter, history: List<Pair<MediaType, String>>, excluded: Set<String>): FeaturedItem? = null
+
     /** A partir de ahora, lo guardado con más de 30 minutos se vuelve a pedir a la red en vez de enseñarse. */
     fun invalidateHome()
 
@@ -26,11 +28,17 @@ interface CatalogRepository {
 
     suspend fun search(query: String): List<CatalogItem>
 
+    suspend fun searchFiltered(query: String, filters: CatalogSearchFilters): List<CatalogItem> = search(query).filter(filters::matches)
+
     /**
      * En un perfil infantil, lo que [search] deja fuera por no ser infantil: se enseña bloqueado para pedírselo a un
      * adulto. En los demás perfiles, vacío.
      */
     suspend fun searchOutsideKids(query: String): List<CatalogItem> = emptyList()
+
+    suspend fun getSimilar(item: CatalogItem): List<CatalogItem> = emptyList()
+
+    suspend fun getPreview(item: CatalogItem): com.shieldstream.tv.model.TitlePreview = com.shieldstream.tv.model.TitlePreview()
 
     suspend fun getDetails(item: CatalogItem): CatalogDetails
 
@@ -54,3 +62,20 @@ data class StreamResults(
     val unavailable: Map<String, String> = emptyMap(),
     val pending: Set<String> = emptySet(),
 )
+
+/** Filters are applied before pagination. Blank text allows browsing the selected catalog. */
+data class CatalogSearchFilters(
+    val series: Boolean = false,
+    val genre: String = "",
+    val minRating: Int = 0,
+    val platform: String = "",
+    val year: Int = 0,
+    val all: Boolean = true,
+    val years: Set<Int> = emptySet(),
+) {
+    val active: Boolean get() = !all || series || genre.isNotBlank() || minRating > 0 || platform.isNotBlank() || year > 0 || years.isNotEmpty()
+    fun matches(item: CatalogItem): Boolean =
+        (if (series) item.type == MediaType.TV else all || item.type == MediaType.MOVIE) &&
+        (minRating == 0 || (item.rating ?: 0f) >= minRating) &&
+        (year == 0 || item.year == year) && (years.isEmpty() || item.year in years)
+}

@@ -66,6 +66,7 @@ fun HomeScreen(
 ) {
     LaunchedEffect(filter) { viewModel.load(filter) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val hidden by viewModel.hiddenCategories.collectAsStateWithLifecycle()
     val trailersEnabled by viewModel.billboardTrailers.collectAsStateWithLifecycle()
 
@@ -91,12 +92,12 @@ fun HomeScreen(
         is HomeUiState.Content -> {
             LaunchedEffect(Unit) { onContentReady() }
             HomeContent(
-            rows = s.rows,
+            rows = remember(s.rows, activeProfile, filter) { com.shieldstream.tv.model.HomeSections.apply(s.rows, activeProfile, filter) },
             featured = s.featured,
-            categories = remember(filter, hidden) {
+            categories = remember(filter, hidden, activeProfile.categoryOrder) {
                 when {
                     viewModel.kidsProfile -> Category.forFilter(filter).filter { it in Category.KIDS_SAFE }
-                    else -> Category.forFilter(filter).filter { it.name !in hidden }.ifEmpty { Category.forFilter(filter) }
+                    else -> Category.forFilter(filter).filter { it.name !in hidden }.sortedBy { category -> activeProfile.categoryOrder.indexOf(category.name).let { if (it < 0) Int.MAX_VALUE else it } }
                 }
             },
             trailersEnabled = trailersEnabled,

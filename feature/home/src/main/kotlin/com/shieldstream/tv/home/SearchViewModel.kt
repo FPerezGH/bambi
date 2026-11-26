@@ -63,6 +63,14 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch { settings.setSearchQwerty(!qwerty.value) }
     }
 
+    val pageSize: StateFlow<Int> = settings.homeRowItemLimit.stateIn(
+        viewModelScope, SharingStarted.Eagerly, SettingsRepository.DEFAULT_HOME_ROW_ITEM_LIMIT,
+    )
+
+    private val _filters = MutableStateFlow(com.shieldstream.tv.domain.CatalogSearchFilters())
+    val filters = _filters.asStateFlow()
+    fun setFilters(value: com.shieldstream.tv.domain.CatalogSearchFilters) { _filters.value = value; setQuery(_query.value) }
+
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -75,7 +83,7 @@ class SearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             suggestions = runCatching { catalogRepository.trending() }.getOrDefault(emptyList())
-            if (_query.value.isBlank()) _uiState.value = SearchUiState.Suggestions(suggestions)
+            if (_query.value.isBlank() && !_filters.value.active) _uiState.value = SearchUiState.Suggestions(suggestions)
         }
     }
 
@@ -89,31 +97,35 @@ class SearchViewModel @Inject constructor(
         _query.value = value
         searchJob?.cancel()
         val q = value.trim()
-        if (q.length < 2) {
+        if (q.length < 2 && !_filters.value.active) {
             _uiState.value = SearchUiState.Suggestions(suggestions)
             return
         }
+        val selectedFilters = _filters.value
         searchJob = viewModelScope.launch {
             delay(450)
             _uiState.value = SearchUiState.Loading
             runCatching {
                 coroutineScope {
-                    val allowed = async { catalogRepository.search(q) }
-                    val outside = async { runCatching { catalogRepository.searchOutsideKids(q) }.getOrDefault(emptyList()) }
+                    val allowed = async { catalogRepository.searchFiltered(q, selectedFilters) }
+                    val outside = async { if (q.isBlank()) emptyList() else try { catalogRepository.searchOutsideKids(q) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { emptyList() } }
                     allowed.await() to outside.await()
                 }
             }
                 .onSuccess { (allowed, outside) ->
                     // Lo que un adulto ya aprobó deja de estar bloqueado.
-                    val (approved, locked) = outside.partition { requests.isApproved(it) }
-                    val items = (allowed + approved).distinctBy { it.key }
+                    val (approved, locked) = outside.filter { selectedFilters.matches(it) }.partition { requests.isApproved(it) }
+                    val items = (allowed + approved.filter { selectedFilters.matches(it) }).distinctBy { it.key }
                     _uiState.value = if (items.isEmpty() && locked.isEmpty()) {
                         SearchUiState.Empty(q)
                     } else {
                         SearchUiState.Results(q, items, locked, locked.filter(requests::isPending).map { it.key }.toSet())
                     }
                 }
-                .onFailure { e -> _uiState.value = SearchUiState.Error(e.message ?: texts.get(StringsR.string.home_search_error)) }
+                .onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    _uiState.value = SearchUiState.Error(e.message ?: texts.get(StringsR.string.home_search_error))
+                }
         }
     }
 }

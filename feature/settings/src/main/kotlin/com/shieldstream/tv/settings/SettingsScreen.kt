@@ -37,7 +37,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.platform.LocalContext
-import com.shieldstream.tv.settings.update.UpdateCard
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -211,6 +210,8 @@ private fun SettingsList(
                     modifier = Modifier.padding(start = 4.dp, top = 2.dp),
                 )
             }
+            item { SectionTitle("Integraciones") }
+            item { TraktConfigurationCard() }
             item { SectionTitle(localizedStringResource(StringsR.string.settings_other_services)) }
             items(otherServices, key = { it.service.name }) { ui ->
                 ServiceCard(
@@ -362,7 +363,6 @@ private fun SettingsList(
             }
             item { SectionTitle(localizedStringResource(StringsR.string.settings_about)) }
             item { AboutCard() }
-            item { UpdateCard() }
             if (showRequests) {
                 item { FamilyRequestsCard(count = pendingRequestCount, onClick = onOpenRequests) }
             }

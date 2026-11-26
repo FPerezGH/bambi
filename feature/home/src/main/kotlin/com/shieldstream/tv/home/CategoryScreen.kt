@@ -67,7 +67,7 @@ class CategoryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = combine(_uiState, settings.homeRowItemLimit) { state, maxItems ->
         if (state !is HomeUiState.Content) return@combine state
-        state.copy(rows = state.rows.map { it.withItemLimit(maxItems) })
+        state.copy(rows = state.rows.map { it.withItemLimit(maxItems.coerceAtLeast(50)) })
     }.stateIn(viewModelScope, SharingStarted.Eagerly, HomeUiState.Loading)
     private var loaded: Pair<Category, HomeFilter>? = null
 

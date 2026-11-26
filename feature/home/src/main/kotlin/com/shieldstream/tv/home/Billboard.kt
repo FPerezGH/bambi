@@ -237,6 +237,7 @@ private fun FeaturedSlide(featured: FeaturedItem, trailerKey: String?) {
         }
         BadgeChip(
             badge = featured.badge,
+            reasonTitle = featured.reasonTitle,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = 28.dp),
         )
     }
@@ -245,41 +246,8 @@ private fun FeaturedSlide(featured: FeaturedItem, trailerKey: String?) {
 /** "Película • Drama • 2026 • 1 h 37 min  [16+]  ★ 8,6" */
 @Composable
 private fun MetaLine(featured: FeaturedItem) {
-    val item = featured.item
-    val text = listOfNotNull(
-        if (item.type == MediaType.TV) localizedStringResource(StringsR.string.home_series) else localizedStringResource(StringsR.string.home_movie),
-        featured.genre,
-        item.year?.toString(),
-        featured.durationText,
-    ).joinToString("  •  ")
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = text,
-            color = Color.White,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-        )
-        featured.certification?.let { cert ->
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = cert,
-                color = Color.White,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier
-                    .background(certificationColor(cert), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 1.dp),
-            )
-        }
-        item.rating?.takeIf { it > 0f }?.let { rating ->
-            Spacer(Modifier.width(12.dp))
-            Text("★", color = Color(0xFFFFC94A), style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = String.format(UiLocale, "%.1f", rating),
-                color = Color.White,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            )
-        }
-    }
+    com.shieldstream.tv.ui.component.TitlePreviewMetadata(featured.item,
+        fallbackGenre = featured.genre, fallbackDuration = featured.durationText, fallbackCertification = featured.certification)
 }
 
 /** Colores de la calificación por edades española: verde TP, amarillo 7/12/13, naranja 16, rojo 18. */
@@ -292,7 +260,7 @@ private fun certificationColor(cert: String): Color = when (cert.removeSuffix("+
 }
 
 @Composable
-private fun BadgeChip(badge: FeaturedBadge, modifier: Modifier = Modifier) {
+private fun BadgeChip(badge: FeaturedBadge, modifier: Modifier = Modifier, reasonTitle: String? = null) {
     val (icon, tint) = badgeIcon(badge)
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -304,7 +272,10 @@ private fun BadgeChip(badge: FeaturedBadge, modifier: Modifier = Modifier) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(
-            text = badge.localizedLabel(),
+            text = if (badge == FeaturedBadge.BECAUSE_WATCHED && reasonTitle != null) "${badge.localizedLabel()} $reasonTitle" else badge.localizedLabel(),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 280.dp),
             color = Color.White,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
         )
@@ -318,6 +289,21 @@ private fun badgeIcon(badge: FeaturedBadge): Pair<ImageVector, Color> = when (ba
     FeaturedBadge.SERIES_NOW -> AppIcons.Tv to Color(0xFF4FA3FF)
     FeaturedBadge.MOVIE_NOW -> AppIcons.Movie to Color(0xFF4FA3FF)
     FeaturedBadge.ACCLAIMED -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.BUZZ -> AppIcons.Trending to Color(0xFFFFC94A)
+    FeaturedBadge.UPCOMING -> AppIcons.Bolt to Color(0xFFFFC94A)
+    FeaturedBadge.WEEKEND -> AppIcons.Tv to Color(0xFFFFC94A)
+    FeaturedBadge.RELAX -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.ADRENALINE -> AppIcons.Bolt to Color(0xFFFFC94A)
+    FeaturedBadge.THINK -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.SHORT -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.MINISERIES -> AppIcons.Tv to Color(0xFFFFC94A)
+    FeaturedBadge.FAMILY -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.HIDDEN_GEM -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.CLASSIC -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.BECAUSE_WATCHED -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.AUDIENCE_FAVORITE -> AppIcons.Star to Color(0xFFFFC94A)
+    FeaturedBadge.SPANISH_CINEMA -> AppIcons.Movie to Color(0xFFFFC94A)
+    FeaturedBadge.ON_YOUR_PLATFORMS -> AppIcons.Tv to Color(0xFF4FA3FF)
 }
 
 /**

@@ -54,6 +54,8 @@ internal fun HomeCategoriesDialog(
     onToggle: (Category) -> Unit,
     onShowAll: () -> Unit,
     onClose: () -> Unit,
+    order: List<String> = emptyList(),
+    onMove: (Category, Int) -> Unit = { _, _ -> },
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -73,25 +75,29 @@ internal fun HomeCategoriesDialog(
             Text(localizedStringResource(StringsR.string.settings_home_categories), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text(
-                localizedStringResource(StringsR.string.settings_ok_shows_or_hides_each_one_back),
+                "OK: mostrar u ocultar · Flechas ↑ ↓: cambiar posición",
                 color = Dim,
                 fontSize = 16.sp,
             )
             Spacer(Modifier.height(18.dp))
             LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
+                columns = GridCells.Fixed(1),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(4.dp),
                 modifier = Modifier.height(300.dp),
             ) {
-                itemsIndexed(Category.entries, key = { _, c -> c.name }) { index, category ->
+                itemsIndexed((order + Category.entries.map { it.name }).distinct().mapNotNull { name -> Category.entries.firstOrNull { it.name == name } }, key = { _, c -> c.name }) { index, category ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CategoryToggle(
                         category = category,
                         shown = category.name !in hidden,
                         onClick = { onToggle(category) },
-                        modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
+                        modifier = Modifier.weight(1f).then(if (index == 0) Modifier.focusRequester(first) else Modifier),
                     )
+                    DialogButton("↑") { onMove(category, -1) }
+                    DialogButton("↓") { onMove(category, 1) }
+                    }
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -104,7 +110,10 @@ internal fun HomeCategoriesDialog(
 }
 
 @Composable
-private fun CategoryToggle(category: Category, shown: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun CategoryToggle(category: Category, shown: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) = PreferenceToggle(category.localizedTitle(), shown, onClick, modifier)
+
+@Composable
+private fun PreferenceToggle(label: String, shown: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -131,7 +140,7 @@ private fun CategoryToggle(category: Category, shown: Boolean, onClick: () -> Un
         }
         Spacer(Modifier.width(12.dp))
         Text(
-            category.localizedTitle(),
+            label,
             color = if (shown) Color.White else Dim,
             fontSize = 16.sp,
             maxLines = 1,
@@ -154,4 +163,100 @@ private fun DialogButton(text: String, onClick: () -> Unit) {
             .tvClickable(onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),
     )
+}
+
+@Composable
+internal fun HomeRowsPreferencesDialog(
+    profile: com.shieldstream.tv.model.Profile,
+    onToggle: (String) -> Unit,
+    onMove: (com.shieldstream.tv.model.HomeFilter, String, Int) -> Unit,
+    onClose: () -> Unit,
+) {
+    val sections = com.shieldstream.tv.model.HomeSections
+    var filter by remember { mutableStateOf(com.shieldstream.tv.model.HomeFilter.ALL) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(150); runCatching { first.requestFocus() } }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(760.dp).background(Panel, RoundedCornerShape(18.dp)).padding(24.dp)) {
+            Text("Personalizar carruseles", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (tab in com.shieldstream.tv.model.HomeFilter.entries) {
+                    val title = when (tab) {
+                        com.shieldstream.tv.model.HomeFilter.ALL -> "Inicio"
+                        com.shieldstream.tv.model.HomeFilter.MOVIES -> "Películas"
+                        com.shieldstream.tv.model.HomeFilter.TV -> "Series"
+                    }
+                    DialogButton(if (tab == filter) "✓ $title" else title) { filter = tab }
+                }
+            }
+            val ids = sections.ids(filter)
+            val order = (profile.homeRowOrder[filter.name].orEmpty() + ids).distinct().filter { it in ids }
+            LazyVerticalGrid(columns = GridCells.Fixed(1), modifier = Modifier.height(300.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(order, key = { _, id -> id }) { index, id ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val key = sections.key(filter, id)
+                        PreferenceToggle(sections.labels[id] ?: id, key !in profile.hiddenHomeRows && id !in profile.hiddenHomeRows,
+                            { onToggle(key) }, Modifier.weight(1f).then(if (index == 0) Modifier.focusRequester(first) else Modifier))
+                        DialogButton("↑") { onMove(filter, id, -1) }
+                        DialogButton("↓") { onMove(filter, id, 1) }
+                    }
+                }
+            }
+            DialogButton("Aceptar", onClose)
+        }
+    }
+}
+
+@Composable
+internal fun PlatformPreferencesDialog(
+    profile: com.shieldstream.tv.model.Profile,
+    onToggle: (String) -> Unit,
+    onOpening: (com.shieldstream.tv.model.PlatformOpening) -> Unit,
+    onClose: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val pm = context.packageManager
+    val first = remember { FocusRequester() }
+    var message by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { delay(150); runCatching { first.requestFocus() } }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(820.dp).background(Panel, RoundedCornerShape(18.dp)).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Mis plataformas", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Inicia sesión en las aplicaciones oficiales; CINEFRAN no guarda contraseñas.", color = Dim, fontSize = 15.sp)
+            LazyVerticalGrid(columns = GridCells.Fixed(1), modifier = Modifier.height(220.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(com.shieldstream.tv.model.StreamingPlatforms.labels.entries.toList(), key = { _, e -> e.key }) { index, entry ->
+                    val intent = com.shieldstream.tv.model.StreamingPlatforms.packages(entry.key).firstNotNullOfOrNull { pkg ->
+                        pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PreferenceToggle(entry.value, entry.key in profile.streamingPlatforms, { onToggle(entry.key) },
+                            Modifier.weight(1f).then(if (index == 0) Modifier.focusRequester(first) else Modifier))
+                        Text(if (intent != null) "Instalada" else "No instalada", color = Dim, fontSize = 14.sp)
+                        DialogButton("Abrir") {
+                            try {
+                                if (intent != null) context.startActivity(intent)
+                                else message = "Instala " + entry.value + " desde Google Play."
+                            } catch (_: Exception) { message = "No se ha podido abrir " + entry.value }
+                        }
+                    }
+                }
+            }
+            Text("Preferencia de apertura", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((mode, label) in listOf(
+                    com.shieldstream.tv.model.PlatformOpening.PLAY to "Reproducir",
+                    com.shieldstream.tv.model.PlatformOpening.DETAILS to "Ficha",
+                    com.shieldstream.tv.model.PlatformOpening.APP to "Aplicación",
+                )) {
+                    DialogButton(if (mode == profile.platformOpening) "✓ $label" else label) { onOpening(mode) }
+                }
+            }
+            Text("Stremio conserva sus fuentes originales.", color = Dim, fontSize = 14.sp)
+            if (message.isNotEmpty()) Text(message, color = Dim, fontSize = 14.sp)
+            DialogButton("Aceptar", onClose)
+        }
+    }
 }

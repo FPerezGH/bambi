@@ -93,6 +93,8 @@ fun ProfileEditScreen(
     var firstPin by remember { mutableStateOf<String?>(null) }
     var pinError by remember { mutableStateOf<String?>(null) }
     var choosingCategories by remember { mutableStateOf(false) }
+    var choosingRows by remember { mutableStateOf(false) }
+    var choosingPlatforms by remember { mutableStateOf(false) }
     var choosingIcon by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(ProfileBackground)) {
@@ -230,6 +232,8 @@ fun ProfileEditScreen(
                             onClick = { choosingCategories = true },
                             modifier = Modifier.focusProperties { down = saveRequester },
                         )
+                        OptionChip(text = "Carruseles", highlighted = profile.hiddenHomeRows.isNotEmpty() || profile.homeRowOrder.isNotEmpty(), onClick = { choosingRows = true })
+                        OptionChip(text = "Plataformas (${profile.streamingPlatforms.size})", highlighted = true, onClick = { choosingPlatforms = true })
                     }
                 }
             }
@@ -308,9 +312,24 @@ fun ProfileEditScreen(
         )
     }
 
+    if (choosingRows) {
+        com.shieldstream.tv.settings.HomeRowsPreferencesDialog(
+            profile = profile, onToggle = viewModel::toggleHomeRow,
+            onMove = viewModel::moveHomeRow, onClose = { choosingRows = false },
+        )
+    }
+    if (choosingPlatforms) {
+        com.shieldstream.tv.settings.PlatformPreferencesDialog(
+            profile = profile, onToggle = viewModel::togglePlatform,
+            onOpening = viewModel::setPlatformOpening,
+            onClose = { choosingPlatforms = false },
+        )
+    }
     if (choosingCategories) {
         HomeCategoriesDialog(
             hidden = profile.hiddenCategories,
+            order = profile.categoryOrder,
+            onMove = viewModel::moveCategory,
             onToggle = viewModel::toggleCategory,
             onShowAll = viewModel::showAllCategories,
             onClose = { choosingCategories = false },

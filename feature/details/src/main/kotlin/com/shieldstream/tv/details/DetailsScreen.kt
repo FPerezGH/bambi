@@ -170,9 +170,79 @@ private fun DetailsContent(
         }
     }
     var actionsOpen by remember { mutableStateOf(false) }
+    var similarOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val similarRequester = remember { FocusRequester() }
+    var restoreSimilarFocus by remember { mutableStateOf(false) }
+    var similarItems by remember(state.details.item.key) { mutableStateOf<List<com.shieldstream.tv.model.CatalogItem>?>(null) }
+    var similarError by remember(state.details.item.key) { mutableStateOf(false) }
+    var similarRetry by remember { mutableStateOf(0) }
+    LaunchedEffect(similarOpen, state.details.item.key, similarRetry) {
+        if (similarOpen && similarItems == null) {
+            similarError = false
+            try {
+                similarItems = viewModel.similarTitles(state.details.item)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { similarError = true }
+        }
+    }
+    LaunchedEffect(similarOpen) {
+        if (!similarOpen && restoreSimilarFocus) {
+            withFrameNanos { }
+            runCatching { similarRequester.requestFocus() }
+            restoreSimilarFocus = false
+        }
+    }
+    if (similarOpen) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { similarOpen = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            val closeRequester = remember { FocusRequester() }
+            val firstPoster = remember { FocusRequester() }
+            val results = similarItems
+            var selected by remember { mutableStateOf<com.shieldstream.tv.model.CatalogItem?>(null) }
+            LaunchedEffect(results, similarError) {
+                withFrameNanos { }
+                runCatching { if (!results.isNullOrEmpty()) firstPoster.requestFocus() else closeRequester.requestFocus() }
+            }
+            val hero = selected ?: results?.firstOrNull()
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                AsyncImage(model = hero?.backdropUrl ?: state.details.item.backdropUrl, contentDescription = null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.78f)).padding(top = 32.dp)) {
+                    Text("Similares a " + state.details.item.title, color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium, maxLines = 2,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 56.dp))
+                    Spacer(Modifier.height(16.dp))
+                    TvButton(text = "Volver", onClick = { similarOpen = false },
+                        modifier = Modifier.padding(start = 56.dp).focusRequester(closeRequester))
+                    when {
+                        similarError -> {
+                            SectionTitle("No se han podido cargar las recomendaciones")
+                            TvButton(text = "Reintentar", onClick = { similarError = false; similarRetry++ },
+                                modifier = Modifier.padding(start = 56.dp))
+                        }
+                        results == null -> CircularProgressIndicator(modifier = Modifier.padding(56.dp))
+                        results.isEmpty() -> SectionTitle("No hay títulos similares disponibles para este perfil")
+                        else -> {
+                            hero?.let {
+                                Text(it.title, color = Color.White, style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.padding(start = 56.dp, top = 18.dp))
+                                com.shieldstream.tv.ui.component.TitlePreviewMetadata(it, modifier = Modifier.padding(horizontal = 56.dp))
+                                Text(it.overview, color = Grey, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 56.dp, vertical = 8.dp))
+                            }
+                            PosterStrip(items = results, firstRequester = firstPoster, showPreview = false, onFocused = { selected = it },
+                                onItem = { candidate -> similarOpen = false; onOpenItem(candidate) })
+                        }
+                    }
+                }
+            }
+        }
+    }
     var ratingTarget by remember { mutableStateOf<TraktRatingTarget?>(null) }
     var episodeMenu by remember { mutableStateOf<Episode?>(null) }
-    BackHandler(enabled = actionsOpen || episodeMenu != null || !panelOpen) {
+    BackHandler(enabled = !similarOpen && (actionsOpen || episodeMenu != null || !panelOpen)) {
         when {
             ratingTarget != null -> ratingTarget = null
             episodeMenu != null -> episodeMenu = null
@@ -241,6 +311,8 @@ private fun DetailsContent(
                     panelOpen = true
                 },
                 onOpenActions = { actionsOpen = true },
+                onSimilar = { restoreSimilarFocus = true; similarOpen = true },
+                similarRequester = similarRequester,
                 onTrailer = state.details.trailerKey?.let { first -> { onOpenTrailer(state.details.trailerKeys.ifEmpty { listOf(first) }) } },
                 // Al volver a los botones desde abajo, la página sube del todo: si no, la sinopsis quedaba cortada.
                 modifier = Modifier
@@ -431,6 +503,8 @@ private fun InfoBlock(
     onOpenSources: () -> Unit,
     onOpenActions: () -> Unit,
     onTrailer: (() -> Unit)?,
+    onSimilar: () -> Unit,
+    similarRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val item = details.item
@@ -497,6 +571,8 @@ private fun InfoBlock(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(20.dp))
+        OfficialPlatformButtons(details.platformButtons, item, interactive, details.platformOpening)
+        if (details.platformButtons.isNotEmpty()) Spacer(Modifier.height(12.dp))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -539,6 +615,8 @@ private fun InfoBlock(
                     enabled = interactive,
                 )
             }
+            TvButton(text = "Similares", onClick = onSimilar, enabled = interactive,
+                modifier = Modifier.focusRequester(similarRequester))
             if (detailsMoreVisible(state.pendingPlay)) {
                 TvButton(
                     text = localizedStringResource(StringsR.string.details_more),
@@ -580,6 +658,7 @@ private fun MetaRow(details: CatalogDetails, state: DetailsUiState.Content) {
             )
             Spacer(Modifier.width(14.dp))
         }
+        com.shieldstream.tv.ui.component.TomatometerRating(item)
         item.year?.let {
             Text(it.toString(), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.width(14.dp))

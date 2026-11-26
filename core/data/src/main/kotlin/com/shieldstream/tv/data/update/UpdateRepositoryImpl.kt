@@ -52,7 +52,7 @@ class UpdateRepositoryImpl @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
 
-    private val _state = MutableStateFlow<UpdateState>(if (version.isDebug) UpdateState.Unsupported else UpdateState.Idle)
+    private val _state = MutableStateFlow<UpdateState>(UpdateState.Unsupported)
     override val state: StateFlow<UpdateState> = _state.asStateFlow()
 
     private val _promptDismissed = MutableStateFlow(false)
@@ -80,7 +80,7 @@ class UpdateRepositoryImpl @Inject constructor(
     }
 
     override fun check(manual: Boolean) {
-        if (version.isDebug) return
+        if (_state.value == UpdateState.Unsupported) return
         if (job?.isActive == true) return
         val now = System.currentTimeMillis()
         if (!manual && now - prefs.getLong(KEY_LAST_CHECK, 0) < AUTO_CHECK_INTERVAL_MS) return

@@ -23,6 +23,8 @@ data class CatalogDetails(
     /** Saga a la que pertenece la película, si TMDB la agrupa en una colección. */
     val collection: CollectionRef? = null,
     val officialProviders: List<OfficialProvider> = emptyList(),
+    val platformButtons: List<PlatformAvailability> = emptyList(),
+    val platformOpening: PlatformOpening = PlatformOpening.PLAY,
 )
 
 data class Person(
@@ -59,6 +61,7 @@ data class VideoInfo(
     val type: String,
     val official: Boolean,
     val language: String?,
+    val country: String? = null,
 )
 
 object Trailers {
@@ -84,7 +87,15 @@ object Trailers {
                 val type = video.type.normalized()?.let { TYPE_ORDER.indexOf(it) }?.takeIf { it >= 0 } ?: return@mapNotNull null
                 if (!video.site.equals("YouTube", ignoreCase = true) || video.key.isBlank()) return@mapNotNull null
                 val videoLanguage = video.language.normalized()
-                val languageRank = when {
+                val languageRank = if (appLanguage == "es") {
+                    when {
+                        videoLanguage == "es" && video.country.equals("ES", ignoreCase = true) -> 0
+                        videoLanguage == "es" && video.country.isNullOrBlank() -> 1
+                        videoLanguage == "en" -> 2
+                        videoLanguage == "es" -> 3
+                        else -> 4
+                    }
+                } else when {
                     videoLanguage == appLanguage -> 0
                     videoLanguage == "en" -> 1
                     else -> 2
@@ -137,4 +148,14 @@ data class OfficialProvider(
     val name: String,
     val logoUrl: String?,
     val availabilityUrl: String?,
+)
+
+/** A subscription configured for the current profile, whether or not this title is included. */
+data class PlatformAvailability(
+    val key: String,
+    val name: String,
+    val logoUrl: String?,
+    val available: Boolean,
+    val availabilityUrl: String? = null,
+    val availabilityKnown: Boolean = true,
 )

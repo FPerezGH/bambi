@@ -87,17 +87,11 @@ fun TopBar(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp),
         ) {
-            // Marca de Bambi: gatito + "BAMBI" (no enfocable). Las esquinas redondeadas ya vienen en el PNG.
             Image(
-                painter = painterResource(R.drawable.bambi_logo),
-                contentDescription = "Bambi",
-                modifier = Modifier.size(40.dp),
-            )
-            Spacer(Modifier.width(12.dp))
-            Image(
-                painter = painterResource(R.drawable.bambi_wordmark),
-                contentDescription = null,
-                modifier = Modifier.height(22.dp),
+                painter = painterResource(R.drawable.cinefran_logo),
+                contentDescription = "CINEFRAN",
+                modifier = Modifier.width(136.dp).height(36.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
             )
         }
         Row(

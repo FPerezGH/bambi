@@ -75,6 +75,9 @@ class DetailsViewModel @Inject constructor(
     private val _events = MutableSharedFlow<DetailsEvent>(extraBufferCapacity = 1)
     val events = _events.asSharedFlow()
 
+    suspend fun similarTitles(item: com.shieldstream.tv.model.CatalogItem): List<com.shieldstream.tv.model.CatalogItem> =
+        catalogRepository.getSimilar(item)
+
     private var sourcesJob: Job? = null
     private var episodesJob: Job? = null
     private var ratingsJob: Job? = null

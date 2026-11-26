@@ -63,4 +63,19 @@
     <string name="home_locked">Bloqueado</string>
     <string name="home_dismiss_new_episodes">Descartar episodios nuevos</string>
     <string name="home_remove_from_episodes">Quitar de Episodios</string>
+    <string name="featured_buzz">En tendencia esta semana</string>
+    <string name="featured_upcoming">Próximos estrenos</string>
+    <string name="featured_weekend">Maratón de fin de semana</string>
+    <string name="featured_relax">Para desconectar</string>
+    <string name="featured_adrenaline">Adrenalina pura</string>
+    <string name="featured_think">Para pensar y debatir</string>
+    <string name="featured_short">Menos de 90 minutos</string>
+    <string name="featured_miniseries">Miniseries cerradas</string>
+    <string name="featured_family">En familia</string>
+    <string name="featured_hidden_gem">Joyas ocultas</string>
+    <string name="featured_classic">Clásicos imprescindibles</string>
+    <string name="featured_because_watched">Porque viste</string>
+    <string name="featured_audience_favorite">Favoritas del público</string>
+    <string name="featured_spanish_cinema">Cine de aquí</string>
+    <string name="featured_on_your_platforms">Disponible en tus plataformas</string>
 </resources>

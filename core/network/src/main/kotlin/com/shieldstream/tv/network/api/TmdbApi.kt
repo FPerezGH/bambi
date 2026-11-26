@@ -19,6 +19,22 @@ import retrofit2.http.Query
 import retrofit2.http.QueryMap
 
 interface TmdbApi {
+    @GET("3/movie/{id}/recommendations")
+    suspend fun recommendedMovies(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbMovieDto>
+
+    @GET("3/movie/{id}/similar")
+    suspend fun similarMovies(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbMovieDto>
+
+    @GET("3/tv/{id}/recommendations")
+    suspend fun recommendedTv(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbTvDto>
+
+    @GET("3/tv/{id}/similar")
+    suspend fun similarTv(@Path("id") id: Int, @Query("api_key") key: String,
+        @Query("page") page: Int = 1): TmdbPaginated<TmdbTvDto>
+
     @GET("3/{type}/{id}/watch/providers")
     suspend fun watchProviders(
         @Path("type") type: String,
@@ -129,6 +145,13 @@ interface TmdbApi {
     suspend fun search(
         @Query("api_key") key: String,
         @Query("query") query: String,
+    ): TmdbSearchResponse
+
+    @GET("3/search/multi")
+    suspend fun searchPage(
+        @Query("api_key") key: String,
+        @Query("query") query: String,
+        @Query("page") page: Int,
     ): TmdbSearchResponse
 
     @GET("3/movie/{id}")

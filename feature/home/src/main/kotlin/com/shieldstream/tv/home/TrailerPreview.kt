@@ -215,7 +215,7 @@ internal fun embedUrl(videoKey: String) = buildString {
     append("?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3")
     append("&playsinline=1&loop=1&playlist=")
     append(safeKey)
-    append("&disablekb=1&fs=0&cc_load_policy=0")
+    append("&disablekb=1&fs=0&cc_load_policy=1&cc_lang_pref=es&hl=es")
 }
 
 /** Algunos TV boxes vienen sin WebView: sin él la portada se queda con el arte estático. */

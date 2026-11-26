@@ -44,6 +44,8 @@ internal fun TmdbMovieDto.toCatalogItem() = CatalogItem(
     backdropUrl = backdrop_path?.let(TmdbImages::backdrop),
     year = release_date?.take(4)?.toIntOrNull(),
     rating = vote_average.toFloat(),
+    voteCount = vote_count,
+    popularity = popularity,
 )
 
 internal fun TmdbTvDto.toCatalogItem() = CatalogItem(
@@ -56,6 +58,8 @@ internal fun TmdbTvDto.toCatalogItem() = CatalogItem(
     backdropUrl = backdrop_path?.let(TmdbImages::backdrop),
     year = first_air_date?.take(4)?.toIntOrNull(),
     rating = vote_average.toFloat(),
+    voteCount = vote_count,
+    popularity = popularity,
 )
 
 internal fun TmdbSearchResultDto.toCatalogItemOrNull(): CatalogItem? {
@@ -74,5 +78,7 @@ internal fun TmdbSearchResultDto.toCatalogItemOrNull(): CatalogItem? {
         backdropUrl = backdrop_path?.let(TmdbImages::backdrop),
         year = (release_date ?: first_air_date)?.take(4)?.toIntOrNull(),
         rating = vote_average.toFloat(),
+    voteCount = vote_count,
+    popularity = popularity,
     )
 }

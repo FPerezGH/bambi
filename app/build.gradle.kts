@@ -33,8 +33,8 @@ android {
         applicationId = "com.cinefran.tv"
         minSdk = 21
         targetSdk = 35
-        versionCode = 108
-        versionName = "0.1.0"
+        versionCode = 113
+        versionName = "0.3.3" // Includes all accumulated search, profile and platform corrections.
         manifestPlaceholders["appLabel"] = "@string/app_name"
 
         buildConfigField("String", "RD_TOKEN", "\"$rdToken\"")
@@ -71,7 +71,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-pruebas"
-            manifestPlaceholders["appLabel"] = "CINEFRAN (pruebas)"
+            manifestPlaceholders["appLabel"] = "CINEFRAN 0.3.3"
         }
         release {
             isMinifyEnabled = false

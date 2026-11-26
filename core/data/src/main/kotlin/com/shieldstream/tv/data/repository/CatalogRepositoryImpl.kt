@@ -159,7 +159,17 @@ class CatalogRepositoryImpl @Inject constructor(
 
     override suspend fun getFeatured(filter: HomeFilter): List<FeaturedItem> =
         if (kids) cachedFeatured("featured_kids_${filter.name}") { extras.kidsFeatured(filter) }
-        else cachedFeatured("featured_${filter.name}") { extras.featured(filter) }
+        else {
+            val base = cachedFeatured("featured_v3_${filter.name}_${com.shieldstream.tv.model.featuredWeek()}") { extras.featured(filter) }
+            val available = try {
+                extras.subscriptionFeatured(filter, profiles.active.value.streamingPlatforms, base.map { it.item.key }.toSet())
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null }
+            base + listOfNotNull(available)
+        }
+
+    override suspend fun getPersonalFeatured(filter: HomeFilter, history: List<Pair<MediaType, String>>, excluded: Set<String>): FeaturedItem? =
+        if (kids || history.isEmpty()) null else extras.personalFeatured(profiles.active.value.id, filter, history, excluded)
 
     override suspend fun getCategoryRows(category: Category, filter: HomeFilter): List<CatalogRow> =
         if (kids && category !in Category.KIDS_SAFE) emptyList() else extras.categoryRows(category, filter)
@@ -180,7 +190,7 @@ class CatalogRepositoryImpl @Inject constructor(
         // Las páginas que hacen falta para llenar cada fila con el máximo elegido en Ajustes (20 por página).
         val pages = ((maxItems + TMDB_PAGE_SIZE - 1) / TMDB_PAGE_SIZE).coerceIn(1, MAX_HOME_PAGES)
         return if (kids) cachedRows("home_kids_${filter.name}_p$pages") { loadHome(kidsRowsFor(filter, pages), pages) }
-        else cachedRows("home_${filter.name}_p$pages") { loadHome(rowsFor(filter), pages) }
+        else cachedRows("home_${filter.name}_p${pages}_${profiles.active.value.streamingPlatforms.sorted().joinToString("_")}") { loadHome(rowsFor(filter), pages) }
     }
 
     private suspend fun loadHome(specs: List<RowSpec>, pages: Int): List<CatalogRow> = coroutineScope {
@@ -257,10 +267,177 @@ class CatalogRepositoryImpl @Inject constructor(
             val advanced = cinefranSearch(query)
             if (advanced != null) return advanced
         }
-        return tmdb.search(key, query).results
+        return allTitleResults(query)
             .filter { !kids || it.genre_ids.any { g -> g in KIDS_GENRES } }
             .mapNotNull { it.toCatalogItemOrNull() } // descarta personas
             .filter { it.posterUrl != null }
+    }
+
+    override suspend fun searchFiltered(query: String, filters: com.shieldstream.tv.domain.CatalogSearchFilters): List<CatalogItem> = coroutineScope {
+        if (kids) return@coroutineScope if (query.isBlank()) trending().filter(filters::matches) else search(query).filter(filters::matches)
+        val q = query.trim()
+        val normalized = normalizeSearch(q)
+        val types = when {
+            filters.series -> listOf(MediaType.TV)
+            filters.all -> listOf(MediaType.MOVIE, MediaType.TV)
+            else -> listOf(MediaType.MOVIE)
+        }
+        val genreNames = mapOf("comedia" to "comedia", "comedias" to "comedia", "accion" to "accion",
+            "aventuras" to "aventura", "aventura" to "aventura", "dramas" to "drama", "drama" to "drama",
+            "terror" to "terror", "ciencia ficcion" to "ciencia ficcion", "animacion" to "animacion",
+            "documental" to "documental", "documentales" to "documental", "crimen" to "crimen",
+            "suspense" to "thriller", "thriller" to "thriller", "romance" to "romance",
+            "fantasia" to "fantasia", "misterio" to "misterio", "familia" to "familia",
+            "western" to "western", "guerra" to "guerra", "historia" to "historia", "musica" to "musica")
+        fun genreId(media: MediaType, name: String): Int? {
+            val tv = media == MediaType.TV
+            return when (name) {
+                "comedia" -> 35; "accion" -> if (tv) 10759 else 28; "aventura" -> if (tv) 10759 else 12
+                "drama" -> 18; "ciencia ficcion" -> if (tv) 10765 else 878
+                "fantasia" -> if (tv) 10765 else 14; "animacion" -> 16; "documental" -> 99
+                "crimen" -> 80; "misterio" -> 9648; "familia" -> 10751; "western" -> 37
+                "terror" -> if (tv) null else 27; "thriller" -> if (tv) null else 53
+                "romance" -> if (tv) null else 10749; "guerra" -> if (tv) 10768 else 10752
+                "historia" -> if (tv) null else 36; "musica" -> if (tv) null else 10402
+                else -> null
+            }
+        }
+        suspend fun <T> optional(fallback: T, block: suspend () -> T): T = try { block() }
+            catch (e: CancellationException) { throw e } catch (_: Exception) { fallback }
+        val country = mapOf("espanolas" to "ES", "espanoles" to "ES", "espanola" to "ES", "espanol" to "ES",
+            "francesas" to "FR", "franceses" to "FR", "coreanas" to "KR", "coreanos" to "KR",
+            "japonesas" to "JP", "japoneses" to "JP", "italianas" to "IT", "italianos" to "IT")
+        val tokens = normalized.split(Regex("\\s+"))
+        val origin = tokens.lastOrNull()?.let { country[it] }
+        val genreText = if (origin != null) tokens.dropLast(1).joinToString(" ") else normalized
+        val typedGenre = genreNames[genreText]
+        val selectedGenre = filters.genre.ifBlank { typedGenre.orEmpty() }
+        val genres = types.associateWith { genreId(it, selectedGenre) }
+        val directJob = async { if (q.isBlank()) emptyList() else allTitleResults(q) }
+        val keywordJob = async {
+            if (q.isBlank() || typedGenre != null) emptyList<Int>() else {
+                val terms = SpanishSearchKeywords.terms(normalized)
+                terms.flatMap { term ->
+                    optional(emptyList()) {
+                        tmdb.searchKeyword(key, term).results.filter { normalizeSearch(it.name) == term }.map { it.id }
+                    }
+                }.distinct().take(20)
+            }
+        }
+        val direct = directJob.await()
+        val keywords = keywordJob.await()
+        val people = direct.filter { it.media_type == "person" && it.id > 0 }
+            .filter { normalizeSearch(it.name.orEmpty()).contains(normalized) }
+            .sortedByDescending { it.popularity }.take(12)
+        val credits = people.map { person -> async {
+            optional(emptyList<TmdbSearchResultDto>()) { tmdb.person(person.id, key).combined_credits?.cast.orEmpty() }
+        } }.awaitAll().flatten()
+        val provider = filters.platform
+        fun matchesDto(dto: TmdbSearchResultDto): Boolean {
+            val media = when (dto.media_type) { "movie" -> MediaType.MOVIE; "tv" -> MediaType.TV; else -> return false }
+            if (media !in types) return false
+            val genre = genres[media]
+            if (filters.genre.isNotBlank() && (genre == null || genre !in dto.genre_ids)) return false
+            return true
+        }
+        val directItems = (direct + credits).filter(::matchesDto).mapNotNull { it.toCatalogItemOrNull() }.filter(filters::matches)
+        val verified = if (provider.isBlank() || provider == "stremio") directItems else directItems.chunked(8).flatMap { chunk ->
+            chunk.map { item -> async {
+                item.takeIf { officialProviders(it).any { p -> com.shieldstream.tv.model.StreamingPlatforms.id(p.name) == provider } }
+            } }.awaitAll().filterNotNull()
+        }
+        val discover = if (q.isBlank() || typedGenre != null || keywords.isNotEmpty()) types.map { media -> async {
+            val genre = genres[media]
+            if (selectedGenre.isNotBlank() && genre == null) return@async emptyList<CatalogItem>()
+            val type = if (media == MediaType.TV) "tv" else "movie"
+            val params = mutableMapOf("include_adult" to "false", "sort_by" to "popularity.desc")
+            genre?.let { params["with_genres"] = it.toString() }
+            if (origin != null && typedGenre != null) params["with_origin_country"] = origin
+            if (keywords.isNotEmpty()) params["with_keywords"] = keywords.joinToString("|")
+            if (filters.minRating > 0) params["vote_average.gte"] = filters.minRating.toString()
+            if (provider.isNotBlank() && provider != "stremio") {
+                val ids = tmdb.providerList(type, key).results.filter { com.shieldstream.tv.model.StreamingPlatforms.id(it.provider_name) == provider }.map { it.provider_id }.distinct()
+                if (ids.isEmpty()) return@async emptyList<CatalogItem>()
+                params["watch_region"] = "ES"
+                params["with_watch_providers"] = ids.joinToString("|")
+                params["with_watch_monetization_types"] = "flatrate"
+            }
+            val dateField = if (media == MediaType.TV) "first_air_date" else "primary_release_date"
+            val years = (filters.years + listOfNotNull(filters.year.takeIf { it > 0 })).sorted()
+            val ranges = mutableListOf<IntRange>()
+            for (year in years) {
+                val last = ranges.lastOrNull()
+                if (last != null && year <= last.last + 1) ranges[ranges.lastIndex] = last.first..maxOf(last.last, year)
+                else ranges += year..year
+            }
+            val buckets = if (ranges.isEmpty()) listOf(params.toMap()) else ranges.map {
+                params + mapOf("$dateField.gte" to "${it.first}-01-01", "$dateField.lte" to "${it.last}-12-31")
+            }
+            val result = mutableListOf<CatalogItem>()
+            for (bucket in buckets) {
+                var page = 1
+                var pages = 1
+                do {
+                    val request = bucket + ("page" to page.toString())
+                    try {
+                        if (media == MediaType.TV) {
+                            val response = tmdb.discoverTvQuery(key, request)
+                            pages = response.total_pages
+                            result += response.results.map { it.toCatalogItem() }
+                        } else {
+                            val response = tmdb.discoverMovieQuery(key, request)
+                            pages = response.total_pages
+                            result += response.results.map { it.toCatalogItem() }
+                        }
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { if (result.isEmpty() && verified.isEmpty()) throw e else break }
+                    page++
+                } while (page <= pages.coerceAtMost(25) && result.size < 1000)
+            }
+            result.filter(filters::matches)
+        } }.awaitAll().flatten() else emptyList()
+        (verified + discover).filter { it.posterUrl != null }.distinctBy { it.key }.sortedByDescending { it.recommendationScore }
+    }
+
+    private fun normalizeSearch(value: String): String =
+        java.text.Normalizer.normalize(value.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+
+    private fun searchTopics(q: String): List<String> {
+        val aliases = linkedMapOf(
+            "vampir" to "vampire", "zombi" to "zombie", "extraterrestre" to "alien",
+            "alien" to "alien", "viajes en el tiempo" to "time travel", "viaje en el tiempo" to "time travel",
+            "segunda guerra mundial" to "world war ii", "primera guerra mundial" to "world war i",
+            "guerra" to "war", "asesino en serie" to "serial killer", "asesinos en serie" to "serial killer",
+            "atraco" to "heist", "robo" to "heist", "espia" to "spy", "espionaje" to "espionage",
+            "dinosaur" to "dinosaur", "superheroe" to "superhero", "apocalipsis" to "apocalypse",
+            "fantasma" to "ghost", "bruja" to "witch", "magia" to "magic", "robot" to "robot",
+            "inteligencia artificial" to "artificial intelligence", "espacio" to "outer space",
+            "pirata" to "pirate", "carcel" to "prison", "supervivencia" to "survival",
+            "catastrofe" to "disaster", "deportes" to "sports", "futbol" to "football",
+            "navidad" to "christmas", "detective" to "detective", "mafia" to "mafia",
+            "viaje" to "travel", "medieval" to "medieval", "western" to "western",
+            "tiburon" to "shark", "perro" to "dog", "coche" to "car", "carreras" to "racing",
+            "familia" to "family", "amistad" to "friendship", "venganza" to "revenge",
+            "amor" to "love", "musica" to "music", "hospital" to "hospital", "abogado" to "lawyer"
+        )
+        val known = aliases.filterKeys { q.contains(it) }.values.distinct()
+        if (known.isNotEmpty()) return known.take(4)
+        val clean = q.replace(Regex("(?:nota|valoracion|puntuacion|tmdb).*"), "")
+            .replace(Regex("\\b(peliculas?|series?|sobre|de|del|con|en|las?|los?|una?|unos?|mejores|comedia[s]?|drama[s]?|terror|accion|animacion|documental(?:es)?|ciencia ficcion|thriller[s]?|romance|crimen|aventura[s]?|netflix|prime video|hbo max|movistar|vodafone|anos|\\d+)\\b"), " ")
+            .trim().replace(Regex("\\s+"), " ")
+        return if (clean.length < 3) emptyList() else listOf(clean).take(1)
+    }
+
+    private suspend fun allTitleResults(query: String): List<TmdbSearchResultDto> {
+        val first = tmdb.search(key, query)
+        val results = first.results.toMutableList()
+        for (page in 2..first.total_pages.coerceAtMost(50)) {
+            try { results += tmdb.searchPage(key, query, page).results }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { break }
+        }
+        return results.distinctBy { it.media_type to it.id }
     }
 
     override suspend fun searchOutsideKids(query: String): List<CatalogItem> {
@@ -283,14 +460,34 @@ class CatalogRepositoryImpl @Inject constructor(
         val genre = genres.entries.firstOrNull { q.contains(it.key) }?.value
         val rating = Regex("(?:nota|valoracion|tmdb|puntuacion)\\s*(?:tmdb\\s*)?(?:mayor a|mayor de|superior a|desde|>=|>)?\\s*(\\d+(?:[.,]\\d+)?)")
             .find(q)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
-        val vampire = q.contains("vampir")
+        val vampire = Regex("\\b(vampiros?|vampiras?|vampirismo)\\b").containsMatchIn(q) && (q.split(Regex("\\s+")).size == 1 || Regex("\\b(peliculas?|series?|sobre|de|con)\\b").containsMatchIn(q))
         val decade = Regex("anos\\s+(\\d{2}|\\d{4})\\b").find(q)?.groupValues?.get(1)?.toIntOrNull()
-        if (genre == null && rating == null && !vampire && decade == null) return null
+        val providerNames = listOf("netflix", "prime video", "hbo max", "movistar", "vodafone")
+            .filter { q.contains(it) }
+        val duration = Regex("menos de (\\d+) minutos").find(q)?.groupValues?.get(1)?.toIntOrNull()
+        val spanish = Regex("\\b(espanolas?|espanoles?)\\b").containsMatchIn(q)
+        val structured = Regex("\\b(peliculas?|series?|mejores|comedias?|dramas?|thrillers?)\\b").containsMatchIn(q)
+        if (!structured && rating == null && duration == null && !vampire && genre == null) return null
+        if (genre == null && rating == null && !vampire && decade == null && providerNames.isEmpty() && duration == null && !spanish) return null
         val params = mutableMapOf("include_adult" to "false", "sort_by" to "vote_average.desc",
             "vote_count.gte" to if (series) "100" else "300", "language" to "es-ES")
         val tvGenre = when (genre) { 28, 12 -> 10759; 878 -> 10765; 27, 53, 10749 -> null; else -> genre }
         (if (series) tvGenre else genre)?.let { params["with_genres"] = it.toString() }
         rating?.let { params["vote_average.gte"] = it.toString() }
+        if (!series) params["with_runtime.gte"] = "60"
+        duration?.let { params["with_runtime.lte"] = (it - 1).coerceAtLeast(0).toString() }
+        if (spanish) params["with_original_language"] = "es"
+        if (providerNames.isNotEmpty()) {
+            val ids = tmdb.providerList(if (series) "tv" else "movie", key).results
+                .filter { provider ->
+                    val name = provider.provider_name.lowercase(java.util.Locale.ROOT)
+                    isCinefranProvider(name) && providerNames.any { name.contains(it) || (it == "hbo max" && name == "max") }
+                }.map { it.provider_id }.distinct()
+            if (ids.isEmpty()) return emptyList()
+            params["watch_region"] = "ES"
+            params["with_watch_providers"] = ids.joinToString("|")
+            params["with_watch_monetization_types"] = "flatrate"
+        }
         decade?.let {
             val year = if (it < 100) 1900 + it else it
             val field = if (series) "first_air_date" else "primary_release_date"
@@ -298,9 +495,11 @@ class CatalogRepositoryImpl @Inject constructor(
             params["$field.lte"] = "${year + 9}-12-31"
         }
         if (vampire) {
-            val keyword = tmdb.searchKeyword(key, "vampire").results.firstOrNull { it.name.equals("vampire", true) }
-                ?: return emptyList()
-            params["with_keywords"] = keyword.id.toString()
+            val keywords = listOf("vampire", "vampires", "vampirism").flatMap { term ->
+                tmdb.searchKeyword(key, term).results.filter { it.name.equals(term, true) }
+            }.map { it.id }.distinct()
+            if (keywords.isEmpty()) return emptyList()
+            params["with_keywords"] = keywords.joinToString("|")
         }
         data class Ranked(val item: CatalogItem, val rating: Double, val votes: Int)
         val all = mutableListOf<Ranked>()
@@ -319,9 +518,8 @@ class CatalogRepositoryImpl @Inject constructor(
             }
             page++
         } while (page <= total.coerceAtMost(500))
-        val m = if (series) 100.0 else 300.0
         return all.filter { it.item.posterUrl != null }.distinctBy { it.item.key }
-            .sortedWith(compareByDescending<Ranked> { (it.votes * it.rating + m * 6.5) / (it.votes + m) }
+            .sortedWith(compareByDescending<Ranked> { it.item.weightedRating }
                 .thenByDescending { it.votes }.thenBy { it.item.key })
             .map { it.item }
     }
@@ -369,10 +567,39 @@ class CatalogRepositoryImpl @Inject constructor(
     }
 
 
-    private fun isCinefranProvider(name: String): Boolean {
-        val n = name.lowercase(java.util.Locale.ROOT)
-        return n == "netflix" || n == "amazon prime video" || n == "prime video" ||
-            n == "hbo max" || n == "max" || n.startsWith("movistar plus") || n == "vodafone tv"
+    private fun isCinefranProvider(name: String): Boolean =
+        com.shieldstream.tv.model.StreamingPlatforms.id(name) in profiles.active.value.streamingPlatforms
+
+    private val platformLogoCache = ConcurrentHashMap<String, Cached>()
+    private val platformLogoLock = Mutex()
+
+    private suspend fun platformButtons(item: CatalogItem, available: List<com.shieldstream.tv.model.OfficialProvider>, known: Boolean): List<com.shieldstream.tv.model.PlatformAvailability> {
+        val enabled = profiles.active.value.streamingPlatforms
+        if (enabled.isEmpty() || kids) return emptyList()
+        val type = if (item.type == MediaType.TV) "tv" else "movie"
+        val logos = platformLogoLock.withLock {
+            val hit = platformLogoCache[type]
+            @Suppress("UNCHECKED_CAST")
+            if (hit != null && System.currentTimeMillis() - hit.at < 86400000L) {
+                hit.value as Map<String, String>
+            } else {
+                try {
+                    val result = tmdb.providerList(type, key).results.mapNotNull { p ->
+                        val platform = com.shieldstream.tv.model.StreamingPlatforms.id(p.provider_name)
+                        val path = p.logo_path
+                        if (platform != null && !path.isNullOrBlank()) platform to "https://image.tmdb.org/t/p/w185$path" else null
+                    }.distinctBy { it.first }.toMap()
+                    platformLogoCache[type] = Cached(System.currentTimeMillis(), result)
+                    result
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { emptyMap<String, String>() }
+            }
+        }
+        return com.shieldstream.tv.model.StreamingPlatforms.labels.filterKeys { it in enabled }.map { (platform, label) ->
+            val match = available.firstOrNull { com.shieldstream.tv.model.StreamingPlatforms.id(it.name) == platform }
+            com.shieldstream.tv.model.PlatformAvailability(platform, label, match?.logoUrl ?: logos[platform],
+                match != null, match?.availabilityUrl, known)
+        }
     }
 
     private suspend fun officialProviders(item: CatalogItem): List<com.shieldstream.tv.model.OfficialProvider> {
@@ -414,9 +641,139 @@ class CatalogRepositoryImpl @Inject constructor(
         } }.awaitAll().flatten().distinctBy { it.key }
     }
 
+    override suspend fun getSimilar(item: CatalogItem): List<CatalogItem> {
+        if (kids) return emptyList()
+        val id = item.id.toIntOrNull() ?: return emptyList()
+        val related = linkedMapOf<String, CatalogItem>()
+        var lastError: Exception? = null
+        var successfulRequest = false
+        fun add(items: List<CatalogItem>) {
+            for (candidate in items) {
+                if (candidate.id != item.id && candidate.type == item.type && candidate.posterUrl != null)
+                    if (candidate.key !in related) related[candidate.key] = candidate
+            }
+        }
+        suspend fun attempt(block: suspend () -> List<CatalogItem>): Boolean {
+            return try {
+                val result = block()
+                successfulRequest = true
+                add(result)
+                result.isNotEmpty()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                lastError = e
+                Log.w("CatalogRepository", "Related titles request failed", e)
+                false
+            }
+        }
+        val series = item.type == MediaType.TV
+        for (recommendations in listOf(true, false)) {
+            for (page in 1..3) {
+                val more = attempt {
+                    if (series) {
+                        (if (recommendations) tmdb.recommendedTv(id, key, page) else tmdb.similarTv(id, key, page))
+                            .results.map { it.toCatalogItem() }
+                    } else {
+                        (if (recommendations) tmdb.recommendedMovies(id, key, page) else tmdb.similarMovies(id, key, page))
+                            .results.map { it.toCatalogItem() }
+                    }
+                }
+                if (!more || related.size >= 30) break
+            }
+            if (related.size >= 30) break
+        }
+        if (related.size < 30) {
+            // Discover titles sharing the original genres, only after official related lists.
+            val genres = try {
+                if (series) tmdb.tvDetails(id, key).genres.map { it.id }
+                else tmdb.movieDetails(id, key).genres.map { it.id }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { lastError = e; emptyList() }
+            if (genres.isNotEmpty()) {
+                for (page in 1..3) {
+                    val params = mapOf("with_genres" to genres.take(3).joinToString(","),
+                        "include_adult" to "false", "sort_by" to "vote_average.desc",
+                        "vote_count.gte" to if (series) "100" else "300", "page" to page.toString())
+                    val more = attempt {
+                        if (series) tmdb.discoverTvQuery(key, params).results.map { it.toCatalogItem() }
+                        else tmdb.discoverMovieQuery(key, params).results.map { it.toCatalogItem() }
+                    }
+                    if (!more || related.size >= 30) break
+                }
+            }
+        }
+        if (related.isEmpty() && !successfulRequest) lastError?.let { throw it }
+        return related.values.take(30)
+    }
+
+    private data class CachedPreview(val at: Long, val data: com.shieldstream.tv.model.TitlePreview)
+    private val previewCache = ConcurrentHashMap<String, CachedPreview>()
+
+    override suspend fun getPreview(item: CatalogItem): com.shieldstream.tv.model.TitlePreview = coroutineScope {
+        val id = item.id.toIntOrNull() ?: return@coroutineScope com.shieldstream.tv.model.TitlePreview()
+        val cacheKey = "${item.key}_${Lang.current.name}"
+        previewCache[cacheKey]?.takeIf { System.currentTimeMillis() - it.at < 30 * 60_000L }?.let { return@coroutineScope it.data }
+        val availability = async {
+            try {
+                val type = if (item.type == MediaType.TV) "tv" else "movie"
+                val region = tmdb.watchProviders(type, id, key).results["ES"]
+                region?.flatrate.orEmpty().distinctBy { it.provider_id }.map {
+                    com.shieldstream.tv.model.OfficialProvider(it.provider_id, it.provider_name,
+                        it.logo_path?.let { path -> "https://image.tmdb.org/t/p/w185$path" }, region?.link)
+                } to true
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { emptyList<com.shieldstream.tv.model.OfficialProvider>() to false }
+        }
+        fun certification(value: String?): String? {
+            val c = value?.trim()?.uppercase(java.util.Locale.ROOT)?.takeIf { it.isNotBlank() } ?: return null
+            return when {
+                c in listOf("A", "TP", "APTA", "G", "TV-G", "TV-Y", "ALL") -> "TP"
+                c.all { it.isDigit() } -> "$c+"
+                c.matches(Regex("[0-9]+\\+")) -> c
+                else -> c
+            }
+        }
+        val data = try {
+            if (item.type == MediaType.TV) {
+                val d = tmdb.tvDetails(id, key, append = "content_ratings")
+                val kind = when (d.type?.lowercase(java.util.Locale.ROOT)) {
+                    "talk show", "reality", "news", "variety", "game show" -> "Programa de TV"
+                    else -> "Serie"
+                }
+                com.shieldstream.tv.model.TitlePreview(kind = kind, genres = d.genres.map { it.name },
+                    runtimeMinutes = d.episode_run_time.firstOrNull { it > 0 } ?: d.last_episode_to_air?.runtime?.takeIf { it > 0 },
+                    certification = certification(d.content_ratings?.results?.firstOrNull { it.iso_3166_1 == "ES" }?.rating))
+            } else {
+                val d = tmdb.movieDetails(id, key, append = "release_dates")
+                com.shieldstream.tv.model.TitlePreview(kind = "Película", genres = d.genres.map { it.name },
+                    runtimeMinutes = d.runtime?.takeIf { it > 0 },
+                    certification = certification(d.release_dates?.results?.firstOrNull { it.iso_3166_1 == "ES" }
+                        ?.release_dates?.firstOrNull { it.certification.isNotBlank() }?.certification))
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { com.shieldstream.tv.model.TitlePreview() }
+        val (providers, known) = availability.await()
+        val result = data.copy(providers = providers, availabilityKnown = known)
+        if (data.kind != null && known) {
+            if (previewCache.size >= 250) previewCache.clear()
+            previewCache[cacheKey] = CachedPreview(System.currentTimeMillis(), result)
+        }
+        result
+    }
+
     override suspend fun getDetails(item: CatalogItem): CatalogDetails {
         val id = item.id.toIntOrNull() ?: return CatalogDetails(item)
-        val providers = officialProviders(item)
+        val providerResult = try {
+            val type = if (item.type == MediaType.TV) "tv" else "movie"
+            val region = tmdb.watchProviders(type, id, key).results["ES"]
+            region?.flatrate.orEmpty().filter { isCinefranProvider(it.provider_name) }.distinctBy { it.provider_id }.map {
+                com.shieldstream.tv.model.OfficialProvider(it.provider_id, it.provider_name,
+                    it.logo_path?.let { path -> "https://image.tmdb.org/t/p/w185$path" }, region?.link)
+            } to true
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { emptyList<com.shieldstream.tv.model.OfficialProvider>() to false }
+        val providers = providerResult.first
+        val buttons = platformButtons(item, providers, providerResult.second)
         return if (item.type == MediaType.TV) {
             val d = tmdb.tvDetails(id, key, append = "images,external_ids,translations,aggregate_credits,videos")
             CatalogDetails(
@@ -426,6 +783,8 @@ class CatalogRepositoryImpl @Inject constructor(
                     backdropUrl = d.backdrop_path?.let { backdrop(it) } ?: item.backdropUrl,
                 ),
                 officialProviders = providers,
+                platformButtons = buttons,
+                platformOpening = profiles.active.value.platformOpening,
                 logoUrl = pickLogo(d.images),
                 originalTitle = englishTitle(d.translations) ?: d.original_name,
                 runtimeMinutes = d.episode_run_time.firstOrNull(),
@@ -450,6 +809,8 @@ class CatalogRepositoryImpl @Inject constructor(
                     backdropUrl = d.backdrop_path?.let { backdrop(it) } ?: item.backdropUrl,
                 ),
                 officialProviders = providers,
+                platformButtons = buttons,
+                platformOpening = profiles.active.value.platformOpening,
                 logoUrl = pickLogo(d.images),
                 originalTitle = englishTitle(d.translations) ?: d.original_title,
                 runtimeMinutes = d.runtime?.takeIf { it > 0 },
@@ -474,7 +835,7 @@ class CatalogRepositoryImpl @Inject constructor(
         }
 
     private fun TmdbVideosDto?.trailers(): List<String> = this?.results.orEmpty()
-        .map { VideoInfo(it.key, it.site, it.type, it.official, it.iso_639_1) }
+        .map { VideoInfo(it.key, it.site, it.type, it.official, it.iso_639_1, it.iso_3166_1) }
         .let { Trailers.rank(it, if (Lang.isEnglish) "en" else "es") }
         .take(MAX_TRAILERS)
 

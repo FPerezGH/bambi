@@ -63,4 +63,19 @@
     <string name="home_locked">Locked</string>
     <string name="home_dismiss_new_episodes">Dismiss new episodes</string>
     <string name="home_remove_from_episodes">Remove from Episodes</string>
+    <string name="featured_buzz">Trending this week</string>
+    <string name="featured_upcoming">Coming soon</string>
+    <string name="featured_weekend">Weekend binge</string>
+    <string name="featured_relax">Unwind</string>
+    <string name="featured_adrenaline">Pure adrenaline</string>
+    <string name="featured_think">Food for thought</string>
+    <string name="featured_short">Under 90 minutes</string>
+    <string name="featured_miniseries">Completed miniseries</string>
+    <string name="featured_family">Family viewing</string>
+    <string name="featured_hidden_gem">Hidden gems</string>
+    <string name="featured_classic">Essential classics</string>
+    <string name="featured_because_watched">Because you watched</string>
+    <string name="featured_audience_favorite">Audience favorites</string>
+    <string name="featured_spanish_cinema">Spanish cinema and TV</string>
+    <string name="featured_on_your_platforms">On your platforms</string>
 </resources>

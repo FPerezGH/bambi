@@ -131,6 +131,11 @@ class ProfileRepositoryImpl @Inject constructor(
         val matchContentFrameRate: Boolean? = null,
         val theme: ProfileTheme? = null,
         val avatarImage: String? = null,
+        val categoryOrder: List<String> = emptyList(),
+        val hiddenHomeRows: Set<String> = emptySet(),
+        val homeRowOrder: Map<String, List<String>> = emptyMap(),
+        val streamingPlatforms: Set<String> = com.shieldstream.tv.model.StreamingPlatforms.defaults,
+        val platformOpening: com.shieldstream.tv.model.PlatformOpening = com.shieldstream.tv.model.PlatformOpening.PLAY,
     ) {
         fun toProfile(legacyFirst: Boolean, legacyOnly: Boolean, legacyHidden: Set<String>) = Profile(
             id, name, avatar, traktUser, pinHash, kids,
@@ -152,6 +157,11 @@ class ProfileRepositoryImpl @Inject constructor(
             matchContentFrameRate = matchContentFrameRate ?: true,
             theme = theme ?: ProfileTheme.BAMBI,
             avatarImage = avatarImage,
+            categoryOrder = categoryOrder,
+            hiddenHomeRows = hiddenHomeRows,
+            homeRowOrder = homeRowOrder,
+            streamingPlatforms = streamingPlatforms,
+            platformOpening = platformOpening,
         )
 
         companion object {
@@ -178,6 +188,11 @@ class ProfileRepositoryImpl @Inject constructor(
                 matchContentFrameRate = p.matchContentFrameRate,
                 theme = p.theme,
                 avatarImage = p.avatarImage,
+                categoryOrder = p.categoryOrder,
+                hiddenHomeRows = p.hiddenHomeRows,
+                homeRowOrder = p.homeRowOrder,
+                streamingPlatforms = p.streamingPlatforms,
+                platformOpening = p.platformOpening,
             )
         }
     }
