@@ -120,7 +120,7 @@ fun DetailsScreen(
             viewModel.events.collect { event ->
                 when (event) {
                     DetailsEvent.OpenPlayer -> onPlay()
-                    is DetailsEvent.OpenStremio -> StremioLauncher.open(context, event.item, event.episode, event.spanishOnly)
+                    is DetailsEvent.OpenStremio -> StremioLauncher.open(context, event.item, event.episode)
                 }
             }
         }
@@ -579,7 +579,6 @@ private fun InfoBlock(
             if (state.stremioExternal) StremioPlatformButton(interactive, Modifier.focusRequester(playRequester), onStremio)
             OfficialPlatformButtons(details.platformButtons, item, interactive, details.platformOpening)
         }
-        if (state.stremioExternal && state.spanishOnly) Text("Solo en español: configura el filtro de fuentes en Stremio.", color = Grey, style = MaterialTheme.typography.labelSmall)
         if (state.stremioExternal || details.platformButtons.isNotEmpty()) Spacer(Modifier.height(12.dp))
 
         Row(

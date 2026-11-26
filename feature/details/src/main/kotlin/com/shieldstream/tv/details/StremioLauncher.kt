@@ -39,9 +39,8 @@ internal object StremioLauncher {
             else "stremio:///detail/series/$imdb/$imdb:${episode.season}:${episode.number}?autoPlay=false"
         } else "stremio:///detail/movie/$imdb/$imdb?autoPlay=false"
     }
-    fun open(context: Context, item: CatalogItem, episode: Episode?, spanishOnly: Boolean) {
-        // The external app owns source selection; never silently bypass the user's language preference.
-        if (spanishOnly) Toast.makeText(context, "Solo en español: comprueba los filtros de Stremio antes de reproducir.", Toast.LENGTH_LONG).show()
+    fun open(context: Context, item: CatalogItem, episode: Episode?) {
+        // Stremio owns its audio and source preferences. Do not interrupt normal launches.
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link(item, episode))).setPackage(PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             context.startActivity(intent)

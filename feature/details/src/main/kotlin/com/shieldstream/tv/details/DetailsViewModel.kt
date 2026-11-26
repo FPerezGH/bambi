@@ -520,7 +520,7 @@ class DetailsViewModel @Inject constructor(
     fun openStremio(episode: Episode? = null) {
         val c = content() ?: return
         if (!c.stremioExternal) return
-        _events.tryEmit(DetailsEvent.OpenStremio(c.details.item, episode?.takeIf { c.isSeries }, c.spanishOnly))
+        _events.tryEmit(DetailsEvent.OpenStremio(c.details.item, episode?.takeIf { c.isSeries }))
     }
 
     fun ensureSources() {
