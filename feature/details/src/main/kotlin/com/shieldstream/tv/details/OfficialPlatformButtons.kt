@@ -34,56 +34,29 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.shieldstream.tv.model.PlatformAvailability
+import com.shieldstream.tv.model.PlatformOpening
+import com.shieldstream.tv.model.CatalogItem
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.shieldstream.tv.ui.component.tvClickable
 
-internal fun openOfficialPlatform(context: Context, platform: String, title: String, availabilityUrl: String?): String? {
-    val packages = when (platform) {
-        "netflix" -> listOf("com.netflix.ninja")
-        "prime" -> listOf("com.amazon.amazonvideo.livingroom")
-        "max" -> listOf("com.wbd.stream", "com.hbo.hbonow")
-        "movistar" -> listOf("es.plus.yomvi")
-        "vodafone" -> listOf("com.vodafone.vtv")
-        else -> emptyList()
-    }
-    val pm = context.packageManager
-    for (pkg in packages) {
-        // Only use an app-scoped search when the official app declares a compatible activity.
-        val search = Intent(Intent.ACTION_SEARCH).setPackage(pkg).putExtra(SearchManager.QUERY, title)
-        try {
-            if (search.resolveActivity(pm) != null) {
-                context.startActivity(search)
-                return null
-            }
-        } catch (_: Exception) { }
-        try {
-            val launch = pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg)
-            if (launch != null) {
-                context.startActivity(launch)
-                return null
-            }
-        } catch (_: Exception) { }
-    }
-    // TMDB's regional availability page is not a provider playback URL.
-    val uri = availabilityUrl?.let(Uri::parse)
-    if (uri?.scheme == "https" && (uri.host == "www.themoviedb.org" || uri.host == "themoviedb.org")) {
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-            return null
-        } catch (_: Exception) { }
-    }
-    return "No se pudo abrir la plataforma. Comprueba que esté instalada."
-}
+internal suspend fun openOfficialPlatform(
+    context: Context, platform: String, item: CatalogItem, availabilityUrl: String?,
+    mode: PlatformOpening = PlatformOpening.PLAY,
+): String? = OfficialPlatformLauncher.open(context, platform, item, availabilityUrl, mode)
 
 @Composable
-internal fun OfficialPlatformButtons(platforms: List<PlatformAvailability>, title: String, interactive: Boolean) {
+internal fun OfficialPlatformButtons(platforms: List<PlatformAvailability>, item: CatalogItem, interactive: Boolean, mode: PlatformOpening) {
     if (platforms.isEmpty()) return
     val context = LocalContext.current
-    var message by remember(title) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var opening by remember(item.key) { mutableStateOf(false) }
+    var message by remember(item.key) { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             for (platform in platforms) {
                 var focused by remember(platform.key) { mutableStateOf(false) }
-                val enabled = platform.available && interactive
+                val enabled = platform.available && interactive && !opening
                 val description = platform.name + when {
                     platform.available -> ": disponible"
                     !platform.availabilityKnown -> ": disponibilidad desconocida"
@@ -96,7 +69,11 @@ internal fun OfficialPlatformButtons(platforms: List<PlatformAvailability>, titl
                         .border(if (focused) 3.dp else 1.dp, if (focused) Color.White else Color.White.copy(alpha = 0.20f), shape)
                         .semantics { contentDescription = description }
                         .then(if (enabled) Modifier.onFocusChanged { focused = it.isFocused }.tvClickable {
-                            message = openOfficialPlatform(context, platform.key, title, platform.availabilityUrl)
+                            scope.launch {
+                                opening = true
+                                try { message = openOfficialPlatform(context, platform.key, item, platform.availabilityUrl, mode) }
+                                finally { opening = false }
+                            }
                         } else Modifier)
                         .alpha(if (platform.available) 1f else 0.30f)
                         .padding(4.dp),
@@ -115,6 +92,7 @@ internal fun OfficialPlatformButtons(platforms: List<PlatformAvailability>, titl
         if (platforms.any { !it.availabilityKnown }) {
             Text("No se ha podido verificar la disponibilidad.", color = Grey, style = MaterialTheme.typography.labelSmall)
         }
+        if (opening) Text("Buscando enlace del título…", color = Grey, style = MaterialTheme.typography.labelSmall)
         message?.let { Text(it, color = Grey, style = MaterialTheme.typography.bodySmall) }
     }
 }
