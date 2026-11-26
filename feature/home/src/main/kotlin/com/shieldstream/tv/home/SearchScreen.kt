@@ -116,6 +116,8 @@ fun SearchScreen(
     val firstKey = remember { FocusRequester() }
     val layoutKey = remember { FocusRequester() }
     val cardRequester = remember { FocusRequester() }
+    val firstResultRequester = remember { FocusRequester() }
+    var keyboardVisible by rememberSaveable { mutableStateOf(true) }
     var lastCardKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -150,7 +152,7 @@ fun SearchScreen(
     }
 
     Row(Modifier.fillMaxSize().background(Color.Black)) {
-        if (!carouselMode || state !is SearchUiState.Results || (state as? SearchUiState.Results)?.locked?.isNotEmpty() == true) Column(
+        if (keyboardVisible || !carouselMode || state !is SearchUiState.Results) Column(
             Modifier
                 .width(if (qwerty) 452.dp else 330.dp)
                 .fillMaxHeight()
@@ -213,6 +215,7 @@ fun SearchScreen(
                 onClear = viewModel::clear,
                 onToggleLayout = viewModel::toggleKeyboardLayout,
                 onSystemKeyboard = { systemKeyboard = true },
+                onResults = { runCatching { firstResultRequester.requestFocus() }.getOrDefault(false) },
             )
         }
 
@@ -232,8 +235,8 @@ fun SearchScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.weight(1f),
                 )
-                KeyButton(width = 94.dp, onClick = { carouselMode = !carouselMode }) {
-                    Text(if (carouselMode) "Cuadrícula" else "Carrusel", color = it, style = MaterialTheme.typography.bodySmall)
+                KeyButton(width = 94.dp, onClick = { if (keyboardVisible || !carouselMode) { carouselMode = true; keyboardVisible = false } else { carouselMode = false; keyboardVisible = true } }) {
+                    Text(if (carouselMode && !keyboardVisible) "Cuadrícula" else "Carrusel", color = it, style = MaterialTheme.typography.bodySmall)
                 }
                 KeyButton(width = 90.dp, onClick = { filtersOpen = true }) { Text("Filtros", color = it) }
                 CatalogOrderControl(orderMode, orderYear, { orderMode = it }, { orderYear = it })
@@ -273,7 +276,7 @@ fun SearchScreen(
                 lastCardKey = null
             }
             LaunchedEffect(currentPage) {
-                gridState.scrollToItem(0)
+                if (gridState.layoutInfo.totalItemsCount > 0) gridState.scrollToItem(0)
             }
             if (pages > 1) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -301,7 +304,7 @@ fun SearchScreen(
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                 )
             }
-            if (carouselMode && items.isNotEmpty() && locked.isEmpty()) {
+            if (carouselMode && !keyboardVisible && items.isNotEmpty() && locked.isEmpty()) {
                 val rows = remember(items) {
                     listOf(com.shieldstream.tv.model.CatalogRow("search_page", "Resultados", items))
                 }
@@ -312,8 +315,8 @@ fun SearchScreen(
                             onItemClick = onItemClick,
                             onRemoveContinue = {},
                             onRemoveMyList = {},
-                            onExitTop = { carouselMode = false },
-                            onBack = { carouselMode = false },
+                            onExitTop = { keyboardVisible = true },
+                            onBack = { keyboardVisible = true },
                         )
                     }
                 }
@@ -331,7 +334,8 @@ fun SearchScreen(
                         onClick = { onItemClick(item) },
                         onFocused = { lastCardKey = item.key },
                         width = 118.dp,
-                        modifier = if (item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier,
+                        modifier = Modifier.then(if (item.key == items.firstOrNull()?.key) Modifier.focusRequester(firstResultRequester) else Modifier)
+                            .then(if (item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier),
                     )
                 }
                 if (locked.isNotEmpty()) {
@@ -356,7 +360,8 @@ fun SearchScreen(
                             onClick = { if (!asked) lockedPick = item },
                             onFocused = { lastCardKey = "locked_" + item.key },
                             width = 118.dp,
-                            modifier = if ("locked_" + item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier,
+                            modifier = Modifier.then(if (items.isEmpty() && item.key == locked.firstOrNull()?.key) Modifier.focusRequester(firstResultRequester) else Modifier)
+                                .then(if ("locked_" + item.key == lastCardKey) Modifier.focusRequester(cardRequester) else Modifier),
                             overlay = { LockedOverlay(asked) },
                         )
                     }
@@ -376,6 +381,7 @@ private fun OnScreenKeyboard(
     onClear: () -> Unit,
     onToggleLayout: () -> Unit,
     onSystemKeyboard: () -> Unit,
+    onResults: () -> Boolean,
 ) {
     var toggled by remember { mutableStateOf(false) }
     LaunchedEffect(qwerty) {
@@ -391,7 +397,10 @@ private fun OnScreenKeyboard(
         rows.forEachIndexed { rowIndex, rowKeys ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 rowKeys.forEachIndexed { colIndex, c ->
-                    val mod = if (rowIndex == 0 && colIndex == 0) Modifier.focusRequester(firstKeyRequester) else Modifier
+                    val mod = (if (rowIndex == 0 && colIndex == 0) Modifier.focusRequester(firstKeyRequester) else Modifier)
+                        .then(if (colIndex == rowKeys.lastIndex) Modifier.onPreviewKeyEvent { event ->
+                            event.key == Key.DirectionRight && event.type == KeyEventType.KeyDown && onResults()
+                        } else Modifier)
                     KeyButton(width = keyWidth, onClick = { onChar(c) }, modifier = mod) {
                         Text(c.uppercase(), style = MaterialTheme.typography.titleMedium, color = it)
                     }

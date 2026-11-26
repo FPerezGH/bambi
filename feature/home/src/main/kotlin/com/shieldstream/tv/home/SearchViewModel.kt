@@ -83,7 +83,7 @@ class SearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             suggestions = runCatching { catalogRepository.trending() }.getOrDefault(emptyList())
-            if (_query.value.isBlank()) _uiState.value = SearchUiState.Suggestions(suggestions)
+            if (_query.value.isBlank() && !_filters.value.active) _uiState.value = SearchUiState.Suggestions(suggestions)
         }
     }
 
@@ -101,20 +101,21 @@ class SearchViewModel @Inject constructor(
             _uiState.value = SearchUiState.Suggestions(suggestions)
             return
         }
+        val selectedFilters = _filters.value
         searchJob = viewModelScope.launch {
             delay(450)
             _uiState.value = SearchUiState.Loading
             runCatching {
                 coroutineScope {
-                    val allowed = async { catalogRepository.searchFiltered(q, _filters.value) }
-                    val outside = async { runCatching { catalogRepository.searchOutsideKids(q) }.getOrDefault(emptyList()) }
+                    val allowed = async { catalogRepository.searchFiltered(q, selectedFilters) }
+                    val outside = async { if (q.isBlank()) emptyList() else try { catalogRepository.searchOutsideKids(q) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { emptyList() } }
                     allowed.await() to outside.await()
                 }
             }
                 .onSuccess { (allowed, outside) ->
                     // Lo que un adulto ya aprobó deja de estar bloqueado.
-                    val (approved, locked) = outside.filter { _filters.value.matches(it) }.partition { requests.isApproved(it) }
-                    val items = (allowed + approved.filter { _filters.value.matches(it) }).distinctBy { it.key }
+                    val (approved, locked) = outside.filter { selectedFilters.matches(it) }.partition { requests.isApproved(it) }
+                    val items = (allowed + approved.filter { selectedFilters.matches(it) }).distinctBy { it.key }
                     _uiState.value = if (items.isEmpty() && locked.isEmpty()) {
                         SearchUiState.Empty(q)
                     } else {

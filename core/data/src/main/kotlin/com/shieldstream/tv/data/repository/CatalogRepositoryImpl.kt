@@ -264,66 +264,130 @@ class CatalogRepositoryImpl @Inject constructor(
     }
 
     override suspend fun searchFiltered(query: String, filters: com.shieldstream.tv.domain.CatalogSearchFilters): List<CatalogItem> {
-        // Preserve the child profile path; never run unrestricted discover for children.
         if (kids) return if (query.isBlank()) trending().filter(filters::matches) else search(query).filter(filters::matches)
         val q = query.trim()
-        if (q.isNotEmpty() && !filters.active) {
-            val results = search(q)
-            val explicitlySeries = Regex("\\bseries?\\b", RegexOption.IGNORE_CASE).containsMatchIn(q)
-            return results.filter { it.type == if (explicitlySeries) MediaType.TV else MediaType.MOVIE }
-        }
-        val type = if (filters.series) "tv" else "movie"
-        val genreMap = mapOf("comedia" to 35, "accion" to if (filters.series) 10759 else 28,
-            "drama" to 18, "ciencia ficcion" to if (filters.series) 10765 else 878,
-            "terror" to 27, "animacion" to 16, "documental" to 99)
-        val genre = genreMap[filters.genre]
-        val params = mutableMapOf("include_adult" to "false", "language" to "es-ES", "sort_by" to "popularity.desc",
-            "vote_count.gte" to if (filters.series) "100" else "300")
+        val normalized = normalizeSearch(q)
+        val series = filters.series || Regex("\\bseries?\\b").containsMatchIn(normalized)
+        val type = if (series) "tv" else "movie"
+        val genres = mapOf("comedia" to 35, "accion" to if (series) 10759 else 28,
+            "drama" to 18, "ciencia ficcion" to if (series) 10765 else 878,
+            "terror" to 27, "animacion" to 16, "documental" to 99, "aventura" to if (series) 10759 else 12,
+            "thriller" to 53, "romance" to 10749, "crimen" to 80)
+        val genre = genres[filters.genre] ?: genres.entries.firstOrNull { normalized.contains(it.key) }?.value
+        val rating = maxOf(filters.minRating.toDouble(), Regex("(?:nota|valoracion|puntuacion|tmdb)\\s*(?:tmdb\\s*)?(?:mayor a|mayor de|superior a|>=|>)?\\s*(\\d+(?:[.,]\\d+)?)")
+            .find(normalized)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull() ?: 0.0)
+        val params = mutableMapOf("include_adult" to "false", "sort_by" to "vote_average.desc",
+            "vote_count.gte" to if (series) "100" else "300")
         genre?.let { params["with_genres"] = it.toString() }
-        if (filters.minRating > 0) params["vote_average.gte"] = filters.minRating.toString()
-        if (filters.year > 0) params[if (filters.series) "first_air_date_year" else "primary_release_year"] = filters.year.toString()
-        if (filters.platform.isNotBlank()) {
-            if (filters.platform !in profiles.active.value.streamingPlatforms) return emptyList()
+        if (rating > 0) params["vote_average.gte"] = rating.coerceAtMost(10.0).toString()
+        val dateField = if (series) "first_air_date" else "primary_release_date"
+        val decade = Regex("anos\\s+(\\d{2}|\\d{4})\\b").find(normalized)?.groupValues?.get(1)?.toIntOrNull()
+        if (filters.year > 0) {
+            params["$dateField.gte"] = "${filters.year}-01-01"
+            params["$dateField.lte"] = "${filters.year}-12-31"
+        } else if (decade != null) {
+            val year = if (decade < 100) 1900 + decade else decade
+            params["$dateField.gte"] = "$year-01-01"
+            params["$dateField.lte"] = "${year + 9}-12-31"
+        }
+        val provider = filters.platform.ifBlank {
+            listOf("netflix" to "netflix", "prime video" to "prime", "hbo max" to "max",
+                "movistar" to "movistar", "vodafone" to "vodafone").firstOrNull { normalized.contains(it.first) }?.second.orEmpty()
+        }
+        if (provider.isNotBlank()) {
+            if (provider !in profiles.active.value.streamingPlatforms) return emptyList()
             val ids = tmdb.providerList(type, key).results.filter {
-                com.shieldstream.tv.model.StreamingPlatforms.id(it.provider_name) == filters.platform
+                com.shieldstream.tv.model.StreamingPlatforms.id(it.provider_name) == provider
             }.map { it.provider_id }.distinct()
             if (ids.isEmpty()) return emptyList()
             params["watch_region"] = "ES"
             params["with_watch_providers"] = ids.joinToString("|")
             params["with_watch_monetization_types"] = "flatrate"
         }
+        val topicWords = searchTopics(normalized)
+        val keywords = topicWords.flatMap { term ->
+            try { tmdb.searchKeyword(key, term).results.filter { normalizeSearch(it.name) == term }.map { it.id } }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { emptyList() }
+        }.distinct()
+        val hasCriteria = genre != null || rating > 0 || filters.year > 0 || decade != null || provider.isNotBlank()
+        val items = mutableListOf<CatalogItem>()
+        // Direct matches remain available even if an optional keyword service fails.
         if (q.isNotEmpty()) {
-            // Search titles first, then verify filters against actual TMDB metadata.
-            val candidates = allTitleResults(q).filter { it.media_type == type && (genre == null || genre in it.genre_ids) }
-                .mapNotNull { it.toCatalogItemOrNull() }.filter(filters::matches).filter { it.posterUrl != null }
-            return if (filters.platform.isBlank()) candidates else candidates.filter { item ->
-                officialProviders(item).any { com.shieldstream.tv.model.StreamingPlatforms.id(it.name) == filters.platform }
+            val candidates = try { allTitleResults(q) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            for (dto in candidates) {
+                if (dto.media_type != type || (genre != null && genre !in dto.genre_ids)) continue
+                val item = dto.toCatalogItemOrNull() ?: continue
+                if ((item.rating ?: 0f) < rating || (filters.year > 0 && item.year != filters.year)) continue
+                if (provider.isNotBlank() && officialProviders(item).none { com.shieldstream.tv.model.StreamingPlatforms.id(it.name) == provider }) continue
+                items += item
             }
         }
-        val items = mutableListOf<CatalogItem>()
-        var page = 1
-        var pages: Int
-        do {
-            val p = params + ("page" to page.toString())
-            if (filters.series) {
-                val result = tmdb.discoverTvQuery(key, p)
-                pages = result.total_pages
-                items += result.results.map { it.toCatalogItem() }
-            } else {
-                val result = tmdb.discoverMovieQuery(key, p)
-                pages = result.total_pages
-                items += result.results.map { it.toCatalogItem() }
-            }
-            page++
-        } while (page <= pages.coerceAtMost(500))
+        if (q.isBlank() || keywords.isNotEmpty() || hasCriteria && topicWords.isEmpty()) {
+            if (keywords.isNotEmpty()) params["with_keywords"] = keywords.joinToString("|")
+            var page = 1
+            var pages = 1
+            do {
+                val p = params + ("page" to page.toString())
+                try {
+                    if (series) {
+                        val result = tmdb.discoverTvQuery(key, p)
+                        pages = result.total_pages
+                        items += result.results.map { it.toCatalogItem() }
+                    } else {
+                        val result = tmdb.discoverMovieQuery(key, p)
+                        pages = result.total_pages
+                        items += result.results.map { it.toCatalogItem() }
+                    }
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    if (items.isEmpty()) throw e
+                    break
+                }
+                page++
+            } while (page <= pages.coerceAtMost(50))
+        }
         return items.filter { it.posterUrl != null }.distinctBy { it.key }
+            .sortedByDescending { it.recommendationScore }
+    }
+
+    private fun normalizeSearch(value: String): String =
+        java.text.Normalizer.normalize(value.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+
+    private fun searchTopics(q: String): List<String> {
+        val aliases = linkedMapOf(
+            "vampir" to "vampire", "zombi" to "zombie", "extraterrestre" to "alien",
+            "alien" to "alien", "viajes en el tiempo" to "time travel", "viaje en el tiempo" to "time travel",
+            "segunda guerra mundial" to "world war ii", "primera guerra mundial" to "world war i",
+            "guerra" to "war", "asesino en serie" to "serial killer", "asesinos en serie" to "serial killer",
+            "atraco" to "heist", "robo" to "heist", "espia" to "spy", "espionaje" to "espionage",
+            "dinosaur" to "dinosaur", "superheroe" to "superhero", "apocalipsis" to "apocalypse",
+            "fantasma" to "ghost", "bruja" to "witch", "magia" to "magic", "robot" to "robot",
+            "inteligencia artificial" to "artificial intelligence", "espacio" to "outer space",
+            "pirata" to "pirate", "carcel" to "prison", "supervivencia" to "survival",
+            "catastrofe" to "disaster", "deportes" to "sports", "futbol" to "football",
+            "navidad" to "christmas", "detective" to "detective", "mafia" to "mafia",
+            "viaje" to "travel", "medieval" to "medieval", "western" to "western",
+            "tiburon" to "shark", "perro" to "dog", "coche" to "car", "carreras" to "racing",
+            "familia" to "family", "amistad" to "friendship", "venganza" to "revenge",
+            "amor" to "love", "musica" to "music", "hospital" to "hospital", "abogado" to "lawyer"
+        )
+        val known = aliases.filterKeys { q.contains(it) }.values.distinct()
+        if (known.isNotEmpty()) return known.take(4)
+        val clean = q.replace(Regex("(?:nota|valoracion|puntuacion|tmdb).*"), "")
+            .replace(Regex("\\b(peliculas?|series?|sobre|de|del|con|en|las?|los?|una?|unos?|mejores|comedia[s]?|drama[s]?|terror|accion|animacion|documental(?:es)?|ciencia ficcion|thriller[s]?|romance|crimen|aventura[s]?|netflix|prime video|hbo max|movistar|vodafone|anos|\\d+)\\b"), " ")
+            .trim().replace(Regex("\\s+"), " ")
+        return if (clean.length < 3) emptyList() else listOf(clean).take(1)
     }
 
     private suspend fun allTitleResults(query: String): List<TmdbSearchResultDto> {
         val first = tmdb.search(key, query)
         val results = first.results.toMutableList()
-        for (page in 2..first.total_pages.coerceAtMost(500)) {
-            results += tmdb.searchPage(key, query, page).results
+        for (page in 2..first.total_pages.coerceAtMost(50)) {
+            try { results += tmdb.searchPage(key, query, page).results }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { break }
         }
         return results.distinctBy { it.media_type to it.id }
     }

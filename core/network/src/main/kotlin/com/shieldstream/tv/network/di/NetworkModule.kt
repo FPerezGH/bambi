@@ -79,7 +79,7 @@ object NetworkModule {
         val tmdbClient = client.newBuilder()
             .addInterceptor { chain ->
                 val request = chain.request()
-                val url = request.url.newBuilder().addQueryParameter("language", Lang.current.tmdb).build()
+                val url = request.url.newBuilder().setQueryParameter("language", Lang.current.tmdb).build()
                 chain.proceed(request.newBuilder().url(url).build())
             }
             .build()
