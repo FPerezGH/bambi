@@ -19,7 +19,7 @@ class DebridCacheRepositoryImpl @Inject constructor(
     // La lista de la cuenta de Real-Debrid es la misma para todas las tandas de una búsqueda: se guarda un minuto.
     @Volatile private var rdLibrary: Pair<Long, Set<String>>? = null
 
-    override suspend fun cachedAmong(hashes: Collection<String>): Set<String> = when (settings.debridService.first()) {
+    override suspend fun cachedAmong(hashes: Collection<String>): Set<String> = if (!settings.debridEnabled.first()) emptySet() else when (settings.debridService.first()) {
         // Real-Debrid: los torrents que ya están en la cuenta (como hasta ahora).
         DebridService.REAL_DEBRID -> {
             val now = System.currentTimeMillis()

@@ -119,6 +119,8 @@ interface SettingsRepository {
     suspend fun clearBrokenSources()
 
     /** Servicio debrid en uso (Real-Debrid por defecto). */
+    val debridEnabled: Flow<Boolean> get() = kotlinx.coroutines.flow.flowOf(true)
+    suspend fun setDebridEnabled(enabled: Boolean) {}
     val debridService: Flow<DebridService>
     suspend fun setDebridService(service: DebridService)
 

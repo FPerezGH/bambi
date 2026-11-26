@@ -34,6 +34,7 @@ class ResolveStreamUseCase(
     private val allDebrid: AllDebridAuthRepository,
     private val selectedDebrid: Flow<DebridService>,
     private val texts: ResolveStreamTexts,
+    private val debridEnabled: Flow<Boolean> = kotlinx.coroutines.flow.flowOf(true),
 ) {
     operator fun invoke(source: StreamSource): Flow<ResolveState> = flow {
         source.directUrl?.let {
@@ -41,6 +42,10 @@ class ResolveStreamUseCase(
             return@flow
         }
 
+        if (!debridEnabled.first()) {
+            emit(ResolveState.Failed("Esta fuente necesita un servicio adicional; selecciona una fuente directa compatible."))
+            return@flow
+        }
         source.resolveUrl?.let { url ->
             val service = source.debrid ?: selectedDebrid.first().title
             emit(ResolveState.Progress(texts.requestingLink(service)))

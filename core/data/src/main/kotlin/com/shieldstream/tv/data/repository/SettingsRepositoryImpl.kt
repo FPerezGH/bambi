@@ -228,6 +228,13 @@ class SettingsRepositoryImpl @Inject constructor(
         homeRowItemLimitFlow.value = normalized
     }
 
+    private val debridEnabledFlow = MutableStateFlow(prefs.getBoolean("debrid_enabled", false))
+    override val debridEnabled: Flow<Boolean> = debridEnabledFlow
+    override suspend fun setDebridEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("debrid_enabled", enabled).apply()
+        debridEnabledFlow.value = enabled
+    }
+
     private val debridFlow = MutableStateFlow(
         runCatching { DebridService.valueOf(prefs.getString(KEY_DEBRID, null) ?: "") }
             .getOrDefault(DebridService.REAL_DEBRID),

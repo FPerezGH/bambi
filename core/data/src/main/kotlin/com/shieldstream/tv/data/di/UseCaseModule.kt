@@ -41,6 +41,7 @@ object UseCaseModule {
         allDebrid,
         settings.debridService,
         texts,
+        settings.debridEnabled,
     )
 
     @Provides
