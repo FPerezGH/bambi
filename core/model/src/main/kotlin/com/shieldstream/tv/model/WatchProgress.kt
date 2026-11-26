@@ -29,3 +29,11 @@ data class WatchProgress(
         fun showPrefix(showId: String) = "tv:$showId:"
     }
 }
+
+/** Watched episodes of this show only; one episode must never mark the entire show as watched. */
+fun Map<String, WatchProgress>.watchedEpisodeCount(showId: String): Int =
+    count { (key, progress) -> key.startsWith(WatchProgress.showPrefix(showId)) && progress.isWatched }
+
+fun CatalogItem.watchedCount(progress: Map<String, WatchProgress>): Int =
+    if (type == MediaType.TV) progress.watchedEpisodeCount(id)
+    else if (progress[WatchProgress.movieKey(id)]?.isWatched == true) 1 else 0

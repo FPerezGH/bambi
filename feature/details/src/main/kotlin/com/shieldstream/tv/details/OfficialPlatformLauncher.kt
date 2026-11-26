@@ -26,7 +26,8 @@ internal object OfficialPlatformLauncher {
         return when (platform) {
             "netflix" -> if (id.matches(Regex("[0-9]{6,8}"))) {
                 val detail = "https://www.netflix.com/title/$id"
-                if (mode == PlatformOpening.PLAY && !series) listOf("https://www.netflix.com/watch/$id", detail) else listOf(detail)
+                val nativeDetail = "nflx://www.netflix.com/title/$id"
+                if (mode == PlatformOpening.PLAY && !series) listOf("nflx://www.netflix.com/watch/$id", "https://www.netflix.com/watch/$id", nativeDetail, detail) else listOf(nativeDetail, detail)
             } else emptyList()
             "prime" -> if (id.matches(Regex("[A-Z0-9]{26}|amzn[0-9]\\.dv\\.gti\\.[0-9a-fA-F-]{36}"))) {
                 listOf("https://app.primevideo.com/detail?gti=$id", "https://www.primevideo.com/detail/$id")
@@ -39,21 +40,24 @@ internal object OfficialPlatformLauncher {
     }
 
     private suspend fun resolve(context: Context, platform: String, item: CatalogItem): List<String> = withContext(Dispatchers.IO) {
-        val tmdb = item.id.toIntOrNull()?.takeIf { it > 0 } ?: return@withContext emptyList()
+        val tmdb = item.id.toIntOrNull()?.takeIf { it > 0 }
+        val imdb = item.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
+        if (tmdb == null && imdb == null) return@withContext emptyList()
         val properties = when (platform) {
             "netflix" -> listOf("P1874")
-            "prime" -> listOf("P14462", "P14440")
+            "prime" -> listOf("P8055")
             "max" -> listOf("P8298")
             else -> return@withContext emptyList()
         }
         val tmdbProp = if (item.type == MediaType.TV) "P4983" else "P4947"
         val prefs = context.applicationContext.getSharedPreferences(CACHE, Context.MODE_PRIVATE)
-        val cacheKey = "$platform:${item.key}"
+        val cacheKey = "v2:$platform:${item.key}"
         val cached = prefs.getString(cacheKey, null)
-        if (cached != null && System.currentTimeMillis() - prefs.getLong("$cacheKey:time", 0) < TTL)
+        if (cached != null && System.currentTimeMillis() - prefs.getLong("$cacheKey:time", 0) < (if (cached.isBlank()) 15 * 60_000L else TTL))
             return@withContext cached.split("|").filter { it.isNotBlank() }
         val values = properties.joinToString(" ") { "wdt:$it" }
-        val query = "SELECT DISTINCT ?work ?id WHERE { ?work wdt:$tmdbProp \"$tmdb\" . VALUES ?prop { $values } ?work ?prop ?id . } LIMIT 12"
+        val matches = listOfNotNull(tmdb?.let { "{ ?work wdt:$tmdbProp \"$it\" . }" }, imdb?.let { "{ ?work wdt:P345 \"$it\" . }" }).joinToString(" UNION ")
+        val query = "SELECT DISTINCT ?work ?id WHERE { $matches VALUES ?prop { $values } ?work ?prop ?id . } LIMIT 12"
         val url = URL("https://query.wikidata.org/sparql?format=json&query=" + URLEncoder.encode(query, "UTF-8"))
         var connection: HttpURLConnection? = null
         try {
@@ -103,7 +107,10 @@ internal object OfficialPlatformLauncher {
             for (id in ids) {
                 for (url in links(platform, id, mode, item.type == MediaType.TV)) {
                     for (pkg in packages) {
-                        if (launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg), "title-link")) return null
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        if (platform == "netflix") intent.putExtra("source", "30")
+                        if (launch(intent, "title-link")) return null
                     }
                 }
             }
@@ -113,7 +120,8 @@ internal object OfficialPlatformLauncher {
         }
         for (pkg in packages) {
             val intent = pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg)
-            if (intent != null && launch(intent, "app-home")) return null
+            if (intent != null && launch(intent, "app-home")) return if (mode == PlatformOpening.APP) null
+                else "La plataforma se ha abierto, pero no acepta un enlace directo para este título."
         }
         val uri = availabilityUrl?.let(Uri::parse)
         if (mode != PlatformOpening.APP && uri?.scheme == "https" && uri.host in setOf("www.themoviedb.org", "themoviedb.org")) {

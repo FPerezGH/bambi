@@ -319,8 +319,9 @@ private fun EpisodeCard(
                 releaseDate.ifBlank { null },
             ).joinToString(" · ")
         }
-        if (metadata.isNotEmpty()) {
-            Text(metadata, color = Grey, style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (metadata.isNotEmpty()) Text(metadata, color = Grey, style = MaterialTheme.typography.bodySmall)
+            if (progress?.isWatched == true) com.shieldstream.tv.ui.component.WatchedBadge(1, false)
         }
     }
 }

@@ -80,6 +80,7 @@ fun PosterCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale = focusScale(focused, 1.1f)
+    val watched = rememberWatchedCount(item)
 
     Box(
         modifier = modifier
@@ -117,6 +118,8 @@ fun PosterCard(
             )
         }
         overlay()
+        if (watched > 0) WatchedBadge(watched, item.type == com.shieldstream.tv.model.MediaType.TV,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = if (newEpisodeCount > 0) 34.dp else 6.dp, end = 6.dp), compact = true)
         if (newEpisodeCount > 0) {
             StatusPill(
                 text = localizedPluralResource(R.plurals.poster_new_episodes, newEpisodeCount, newEpisodeCount),

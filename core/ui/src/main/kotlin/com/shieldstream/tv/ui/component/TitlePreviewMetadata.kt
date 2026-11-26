@@ -37,6 +37,7 @@ import kotlinx.coroutines.delay
 @InstallIn(SingletonComponent::class)
 interface TitlePreviewEntryPoint {
     fun catalogRepository(): CatalogRepository
+    fun watchProgressRepository(): com.shieldstream.tv.domain.WatchProgressRepository
 }
 
 /** Load only the currently focused title, never every poster in a carousel. */
@@ -52,6 +53,7 @@ fun TitlePreviewMetadata(item: CatalogItem, modifier: Modifier = Modifier, fallb
         delay(350)
         value = try { catalog?.getPreview(item) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
     }
+    val watched = rememberWatchedCount(item)
     val info = preview
     val kind = info?.kind ?: if (item.type == MediaType.TV) "Serie" else "Película"
     val genres = info?.genres.orEmpty().ifEmpty { item.genres.ifEmpty { listOfNotNull(fallbackGenre) } }
@@ -86,6 +88,7 @@ fun TitlePreviewMetadata(item: CatalogItem, modifier: Modifier = Modifier, fallb
                     if (info.providers.size > providers.size) Text("+${info.providers.size - providers.size}", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                 }
             }
+            WatchedBadge(watched, item.type == MediaType.TV)
         }
     }
 }

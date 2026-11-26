@@ -33,8 +33,8 @@ android {
         applicationId = "com.cinefran.tv"
         minSdk = 21
         targetSdk = 35
-        versionCode = 114
-        versionName = "0.3.4" // Includes all accumulated search, profile and platform corrections.
+        versionCode = 115
+        versionName = "0.3.5" // Includes all accumulated search, profile and platform corrections.
         manifestPlaceholders["appLabel"] = "@string/app_name"
 
         buildConfigField("String", "RD_TOKEN", "\"$rdToken\"")
@@ -71,7 +71,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-pruebas"
-            manifestPlaceholders["appLabel"] = "CINEFRAN Stremio 0.3.4"
+            manifestPlaceholders["appLabel"] = "CINEFRAN Stremio 0.3.5"
         }
         release {
             isMinifyEnabled = false
