@@ -575,13 +575,12 @@ private fun InfoBlock(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(20.dp))
-        if (state.stremioExternal) {
-            StremioPlatformButton(interactive, Modifier.focusRequester(playRequester), onStremio)
-            if (state.spanishOnly) Text("Solo en español: configura el filtro de fuentes en Stremio.", color = Grey, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+            if (state.stremioExternal) StremioPlatformButton(interactive, Modifier.focusRequester(playRequester), onStremio)
+            OfficialPlatformButtons(details.platformButtons, item, interactive, details.platformOpening)
         }
-        OfficialPlatformButtons(details.platformButtons, item, interactive, details.platformOpening)
-        if (details.platformButtons.isNotEmpty()) Spacer(Modifier.height(12.dp))
+        if (state.stremioExternal && state.spanishOnly) Text("Solo en español: configura el filtro de fuentes en Stremio.", color = Grey, style = MaterialTheme.typography.labelSmall)
+        if (state.stremioExternal || details.platformButtons.isNotEmpty()) Spacer(Modifier.height(12.dp))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
