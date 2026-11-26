@@ -238,7 +238,27 @@ class ResolveStreamUseCaseTest {
         assertEquals(listOf("torrent"), fixture.realDebrid.deleted)
     }
 
-    private class Fixture {
+    @Test
+    fun `direct URL works with debrid disabled`() = runTest {
+        val fixture = Fixture(debridEnabled = false)
+        val states = fixture.useCase(source(directUrl = "https://video.test/direct")).toList()
+        assertEquals(listOf(ResolveState.Ready("https://video.test/direct")), states)
+        assertEquals(0, fixture.realDebrid.addMagnetCalls)
+        assertTrue(fixture.torrentio.requests.isEmpty())
+    }
+
+    @Test
+    fun `disabled debrid never resolves paid links or magnets`() = runTest {
+        val fixture = Fixture(debridEnabled = false)
+        assertTrue(fixture.useCase(source(resolveUrl = "https://resolve.test")).toList().last() is ResolveState.Failed)
+        assertTrue(fixture.useCase(source()).toList().last() is ResolveState.Failed)
+        assertEquals(0, fixture.realDebrid.addMagnetCalls)
+        assertEquals(0, fixture.allDebridTorrents.addMagnetCalls)
+        assertEquals(0, fixture.torBox.addMagnetCalls)
+        assertTrue(fixture.torrentio.requests.isEmpty())
+    }
+
+    private class Fixture(debridEnabled: Boolean = true) {
         val realDebrid = FakeRealDebridRepository()
         val allDebridTorrents = FakeAllDebridRepository()
         val torBox = FakeTorBoxRepository()
@@ -253,6 +273,7 @@ class ResolveStreamUseCaseTest {
             allDebrid,
             selectedDebrid,
             TestResolveTexts,
+            MutableStateFlow(debridEnabled),
         )
     }
 
