@@ -492,26 +492,50 @@ private fun SearchFiltersDialog(
     LaunchedEffect(Unit) { withFrameNanos { }; runCatching { first.requestFocus() } }
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.width(760.dp).background(Color(0xFF1C1C1F), RoundedCornerShape(16.dp)).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.width(760.dp).background(Color(0xFF1C1C1F), RoundedCornerShape(16.dp)).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Filtros de búsqueda", color = Color.White, style = MaterialTheme.typography.titleLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KeyButton(150.dp, { draft = draft.copy(series = false) }, Modifier.focusRequester(first)) { Text(if (!draft.series) "✓ Películas" else "Películas", color = it) }
-                KeyButton(150.dp, { draft = draft.copy(series = true) }) { Text(if (draft.series) "✓ Series" else "Series", color = it) }
+                KeyButton(150.dp, { draft = draft.copy(series = false, all = true) }, Modifier.focusRequester(first)) { Text(if (draft.all && !draft.series) "✓ Todos" else "Todos", color = it) }
+                KeyButton(150.dp, { draft = draft.copy(series = false, all = false) }) { Text(if (!draft.all && !draft.series) "✓ Películas" else "Películas", color = it) }
+                KeyButton(150.dp, { draft = draft.copy(series = true, all = false) }) { Text(if (draft.series) "✓ Series" else "Series", color = it) }
             }
-            val genres = listOf("" to "Todos", "comedia" to "Comedia", "accion" to "Acción", "drama" to "Drama", "ciencia ficcion" to "Ciencia ficción", "terror" to "Terror", "animacion" to "Animación", "documental" to "Documental")
+            val genres = listOf("" to "Todos", "comedia" to "Comedia", "accion" to "Acción", "drama" to "Drama", "ciencia ficcion" to "Ciencia ficción", "terror" to "Terror", "animacion" to "Animación", "documental" to "Documental", "aventura" to "Aventura", "crimen" to "Crimen", "fantasia" to "Fantasía", "misterio" to "Misterio", "romance" to "Romance", "thriller" to "Suspense", "familia" to "Familia", "western" to "Western", "guerra" to "Guerra", "historia" to "Historia", "musica" to "Música")
             val gi = genres.indexOfFirst { it.first == draft.genre }.coerceAtLeast(0)
             KeyButton(330.dp, { draft = draft.copy(genre = genres[(gi + 1) % genres.size].first) }) { Text("Género: " + genres[gi].second, color = it) }
-            val ratings = listOf(0, 6, 7, 8, 9)
+            val ratings = listOf(0, 5, 6, 7, 8, 9, 10)
             KeyButton(330.dp, { draft = draft.copy(minRating = ratings[(ratings.indexOf(draft.minRating).coerceAtLeast(0) + 1) % ratings.size]) }) { Text("Nota mínima: " + if (draft.minRating == 0) "Todas" else draft.minRating.toString(), color = it) }
-            val providers = listOf("" to "Todas las fuentes") + com.shieldstream.tv.model.StreamingPlatforms.labels.entries.map { it.key to it.value }
+            val providers = listOf("" to "Todas las fuentes") + com.shieldstream.tv.model.StreamingPlatforms.labels.entries.map { it.key to it.value } + listOf("stremio" to "Stremio (catálogo general)")
             val pi = providers.indexOfFirst { it.first == draft.platform }.coerceAtLeast(0)
             KeyButton(330.dp, { draft = draft.copy(platform = providers[(pi + 1) % providers.size].first) }) { Text("Plataforma: " + providers[pi].second, color = it) }
-            val years = listOf(0) + (2026 downTo 1950).toList()
+            var period by remember { mutableStateOf(5) }
+            val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+            val selected = draft.years + listOfNotNull(draft.year.takeIf { it > 0 })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KeyButton(56.dp, { draft = draft.copy(year = if (draft.year == 0) 2026 else (draft.year - 1).coerceAtLeast(1950)) }) { Text("−", color = it) }
-                Text("Año: " + if (draft.year == 0) "Todos" else draft.year.toString(), color = Color.White, modifier = Modifier.padding(10.dp))
-                KeyButton(56.dp, { draft = draft.copy(year = if (draft.year >= 2026) 0 else if (draft.year == 0) 1950 else draft.year + 1) }) { Text("+", color = it) }
+                for (mode in listOf(1, 5, 10)) {
+                    KeyButton(135.dp, { period = mode }) {
+                        Text((if (mode == period) "✓ " else "") + if (mode == 1) "Años" else "$mode años", color = it)
+                    }
+                }
+                KeyButton(135.dp, { draft = draft.copy(year = 0, years = emptySet()) }) { Text("Todos los años", color = it) }
+            }
+            Text(if (selected.isEmpty()) "Todos los años" else "${selected.size} años seleccionados", color = Color.White)
+            val ranges = remember(period, currentYear) {
+                generateSequence(currentYear - currentYear % period) { it - period }.takeWhile { it >= 1900 }
+                    .map { it..minOf(it + period - 1, currentYear) }.toList()
+            }
+            LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.height(124.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(ranges, key = { it.first }) { range ->
+                    val checked = range.all { it in selected }
+                    val partial = !checked && range.any { it in selected }
+                    KeyButton(160.dp, {
+                        draft = draft.copy(year = 0, years = if (checked) selected - range.toSet() else selected + range.toSet())
+                    }) { color ->
+                        Text((if (checked) "✓ " else if (partial) "◐ " else "") +
+                            if (period == 1) range.first.toString() else "${range.first}–${range.last}", color = color)
+                    }
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 KeyButton(130.dp, { draft = com.shieldstream.tv.domain.CatalogSearchFilters() }) { Text("Limpiar", color = it) }

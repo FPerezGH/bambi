@@ -68,10 +68,12 @@ data class CatalogSearchFilters(
     val minRating: Int = 0,
     val platform: String = "",
     val year: Int = 0,
+    val all: Boolean = true,
+    val years: Set<Int> = emptySet(),
 ) {
-    val active: Boolean get() = series || genre.isNotBlank() || minRating > 0 || platform.isNotBlank() || year > 0
+    val active: Boolean get() = !all || series || genre.isNotBlank() || minRating > 0 || platform.isNotBlank() || year > 0 || years.isNotEmpty()
     fun matches(item: CatalogItem): Boolean =
-        item.type == (if (series) MediaType.TV else MediaType.MOVIE) &&
+        (if (series) item.type == MediaType.TV else all || item.type == MediaType.MOVIE) &&
         (minRating == 0 || (item.rating ?: 0f) >= minRating) &&
-        (year == 0 || item.year == year)
+        (year == 0 || item.year == year) && (years.isEmpty() || item.year in years)
 }
