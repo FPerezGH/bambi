@@ -447,7 +447,8 @@ private fun SearchResultsCarousel(
         if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) { onExit(); true } else false
     }) {
         // Guarantee room for both the selected-title metadata and the complete poster, including focus zoom.
-        val posterWidth = ((maxHeight - 154.dp) / 1.65f).coerceIn(64.dp, 116.dp)
+        val availableHeight = maxHeight
+        val posterWidth = ((availableHeight - 154.dp) / 1.65f).coerceIn(64.dp, 116.dp)
         val rowHeight = posterWidth * 1.65f + 20.dp
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 4.dp),
@@ -456,10 +457,10 @@ private fun SearchResultsCarousel(
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(4.dp))
                 com.shieldstream.tv.ui.component.TitlePreviewMetadata(hero)
-                if (maxHeight >= 260.dp && hero.overview.isNotBlank()) {
+                if (availableHeight >= 260.dp && hero.overview.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Text(hero.overview, color = Color.White.copy(alpha = .85f), style = MaterialTheme.typography.bodySmall,
-                        maxLines = if (maxHeight >= 340.dp) 2 else 1, overflow = TextOverflow.Ellipsis)
+                        maxLines = if (availableHeight >= 340.dp) 2 else 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             LazyRow(state = rowState, modifier = Modifier.fillMaxWidth().height(rowHeight),
