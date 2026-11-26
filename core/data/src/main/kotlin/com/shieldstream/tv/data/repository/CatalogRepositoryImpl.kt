@@ -602,7 +602,7 @@ class CatalogRepositoryImpl @Inject constructor(
         fun add(items: List<CatalogItem>) {
             for (candidate in items) {
                 if (candidate.id != item.id && candidate.type == item.type && candidate.posterUrl != null)
-                    related.putIfAbsent(candidate.key, candidate)
+                    if (candidate.key !in related) related[candidate.key] = candidate
             }
         }
         suspend fun attempt(block: suspend () -> List<CatalogItem>): Boolean {
