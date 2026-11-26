@@ -23,6 +23,7 @@ data class CatalogDetails(
     /** Saga a la que pertenece la película, si TMDB la agrupa en una colección. */
     val collection: CollectionRef? = null,
     val officialProviders: List<OfficialProvider> = emptyList(),
+    val platformButtons: List<PlatformAvailability> = emptyList(),
 )
 
 data class Person(
@@ -146,4 +147,14 @@ data class OfficialProvider(
     val name: String,
     val logoUrl: String?,
     val availabilityUrl: String?,
+)
+
+/** A subscription configured for the current profile, whether or not this title is included. */
+data class PlatformAvailability(
+    val key: String,
+    val name: String,
+    val logoUrl: String?,
+    val available: Boolean,
+    val availabilityUrl: String? = null,
+    val availabilityKnown: Boolean = true,
 )

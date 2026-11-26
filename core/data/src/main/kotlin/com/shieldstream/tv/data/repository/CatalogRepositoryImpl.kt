@@ -522,6 +522,38 @@ class CatalogRepositoryImpl @Inject constructor(
     private fun isCinefranProvider(name: String): Boolean =
         com.shieldstream.tv.model.StreamingPlatforms.id(name) in profiles.active.value.streamingPlatforms
 
+    private val platformLogoCache = ConcurrentHashMap<String, Cached>()
+    private val platformLogoLock = Mutex()
+
+    private suspend fun platformButtons(item: CatalogItem, available: List<com.shieldstream.tv.model.OfficialProvider>, known: Boolean): List<com.shieldstream.tv.model.PlatformAvailability> {
+        val enabled = profiles.active.value.streamingPlatforms
+        if (enabled.isEmpty() || kids) return emptyList()
+        val type = if (item.type == MediaType.TV) "tv" else "movie"
+        val logos = platformLogoLock.withLock {
+            val hit = platformLogoCache[type]
+            @Suppress("UNCHECKED_CAST")
+            if (hit != null && System.currentTimeMillis() - hit.at < 86400000L) {
+                hit.value as Map<String, String>
+            } else {
+                try {
+                    val result = tmdb.providerList(type, key).results.mapNotNull { p ->
+                        val platform = com.shieldstream.tv.model.StreamingPlatforms.id(p.provider_name)
+                        val path = p.logo_path
+                        if (platform != null && !path.isNullOrBlank()) platform to "https://image.tmdb.org/t/p/w185$path" else null
+                    }.distinctBy { it.first }.toMap()
+                    platformLogoCache[type] = Cached(System.currentTimeMillis(), result)
+                    result
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { emptyMap<String, String>() }
+            }
+        }
+        return com.shieldstream.tv.model.StreamingPlatforms.labels.filterKeys { it in enabled }.map { (platform, label) ->
+            val match = available.firstOrNull { com.shieldstream.tv.model.StreamingPlatforms.id(it.name) == platform }
+            com.shieldstream.tv.model.PlatformAvailability(platform, label, match?.logoUrl ?: logos[platform],
+                match != null, match?.availabilityUrl, known)
+        }
+    }
+
     private suspend fun officialProviders(item: CatalogItem): List<com.shieldstream.tv.model.OfficialProvider> {
         val id = item.id.toIntOrNull() ?: return emptyList()
         val type = if (item.type == MediaType.TV) "tv" else "movie"
@@ -628,7 +660,17 @@ class CatalogRepositoryImpl @Inject constructor(
 
     override suspend fun getDetails(item: CatalogItem): CatalogDetails {
         val id = item.id.toIntOrNull() ?: return CatalogDetails(item)
-        val providers = officialProviders(item)
+        val providerResult = try {
+            val type = if (item.type == MediaType.TV) "tv" else "movie"
+            val region = tmdb.watchProviders(type, id, key).results["ES"]
+            region?.flatrate.orEmpty().filter { isCinefranProvider(it.provider_name) }.distinctBy { it.provider_id }.map {
+                com.shieldstream.tv.model.OfficialProvider(it.provider_id, it.provider_name,
+                    it.logo_path?.let { path -> "https://image.tmdb.org/t/p/w185$path" }, region?.link)
+            } to true
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { emptyList<com.shieldstream.tv.model.OfficialProvider>() to false }
+        val providers = providerResult.first
+        val buttons = platformButtons(item, providers, providerResult.second)
         return if (item.type == MediaType.TV) {
             val d = tmdb.tvDetails(id, key, append = "images,external_ids,translations,aggregate_credits,videos")
             CatalogDetails(
@@ -638,6 +680,7 @@ class CatalogRepositoryImpl @Inject constructor(
                     backdropUrl = d.backdrop_path?.let { backdrop(it) } ?: item.backdropUrl,
                 ),
                 officialProviders = providers,
+                platformButtons = buttons,
                 logoUrl = pickLogo(d.images),
                 originalTitle = englishTitle(d.translations) ?: d.original_name,
                 runtimeMinutes = d.episode_run_time.firstOrNull(),
@@ -662,6 +705,7 @@ class CatalogRepositoryImpl @Inject constructor(
                     backdropUrl = d.backdrop_path?.let { backdrop(it) } ?: item.backdropUrl,
                 ),
                 officialProviders = providers,
+                platformButtons = buttons,
                 logoUrl = pickLogo(d.images),
                 originalTitle = englishTitle(d.translations) ?: d.original_title,
                 runtimeMinutes = d.runtime?.takeIf { it > 0 },

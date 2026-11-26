@@ -222,33 +222,9 @@ internal fun SourcesPanel(
                                 .onFocusChanged { focused = it.isFocused }
                                 .tvClickable(onClick = {
                                     officialError = null
-                                    val name = provider.name.lowercase(Locale.ROOT)
-                                    val packages = when {
-                                        name == "netflix" -> listOf("com.netflix.ninja")
-                                        name.contains("prime video") -> listOf("com.amazon.amazonvideo.livingroom")
-                                        name == "max" || name == "hbo max" -> listOf("com.wbd.stream", "com.hbo.hbonow")
-                                        name.startsWith("movistar") -> listOf("es.plus.yomvi")
-                                        name.contains("vodafone") -> listOf("com.vodafone.vtv")
-                                        else -> emptyList()
-                                    }
-                                    val pm = context.packageManager
-                                    val launch = packages.firstNotNullOfOrNull { pkg ->
-                                        pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg)
-                                    }
-                                    try {
-                                        if (launch != null) {
-                                            context.startActivity(launch)
-                                        } else {
-                                            val url = provider.availabilityUrl
-                                            if (url != null && Uri.parse(url).scheme == "https") {
-                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                            } else {
-                                                officialError = "Instala la aplicación oficial para continuar."
-                                            }
-                                        }
-                                    } catch (_: Exception) {
-                                        officialError = "No se pudo abrir la plataforma. Comprueba que esté instalada."
-                                    }
+                                    officialError = openOfficialPlatform(context,
+                                        com.shieldstream.tv.model.StreamingPlatforms.id(provider.name).orEmpty(),
+                                        state.details.item.title, provider.availabilityUrl)
                                 })
                                 .padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,

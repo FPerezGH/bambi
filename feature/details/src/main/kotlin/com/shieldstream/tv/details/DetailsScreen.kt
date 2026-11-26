@@ -570,6 +570,8 @@ private fun InfoBlock(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(20.dp))
+        OfficialPlatformButtons(details.platformButtons, item.title, interactive)
+        if (details.platformButtons.isNotEmpty()) Spacer(Modifier.height(12.dp))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
