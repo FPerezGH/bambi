@@ -85,7 +85,7 @@ internal class StreamSearch(
                 when {
                     section in pending || section in withSources -> null
                     ps.all { done[it]?.isFailure == true } -> section to texts.get(StringsR.string.data_not_responding_right_now)
-                    else -> section to texts.get(StringsR.string.data_no_sources_for_this)
+                    else -> section to if (!debridEnabled && SourceProvider.AIOSTREAMS in ps) "No hay enlaces directos compatibles. Algunas fuentes requieren un motor torrent o un servicio adicional." else texts.get(StringsR.string.data_no_sources_for_this)
                 }
             }.toMap()
             return StreamResults(sources, unavailable, pending)

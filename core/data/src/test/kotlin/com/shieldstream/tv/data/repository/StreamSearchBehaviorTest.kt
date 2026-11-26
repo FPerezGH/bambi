@@ -41,9 +41,11 @@ class StreamSearchBehaviorTest {
     private val torrentio = mockk<TorrentioApi>()
     private val providers = MutableStateFlow(setOf<SourceProvider>())
     private val debrid = MutableStateFlow(DebridService.REAL_DEBRID)
+    private val paidEnabled = MutableStateFlow(true)
     private val settings = mockk<SettingsRepository> {
         every { sourceProviders } returns providers
         every { debridService } returns debrid
+        every { debridEnabled } returns paidEnabled
         every { spanishFirst } returns MutableStateFlow(false)
     }
     private val secrets = mutableMapOf<String, String>()
@@ -191,6 +193,24 @@ class StreamSearchBehaviorTest {
         debrid.value = DebridService.TORBOX
 
         assertTrue(search(movie).isEmpty())
+    }
+
+    @Test
+    fun `direct addon links are retained without paid service and error entries are ignored`() = runTest {
+        paidEnabled.value = false
+        providers.value = setOf(SourceProvider.AIOSTREAMS, SourceProvider.COMET)
+        secrets[TokenStore.keyNameFor(ApiService.AIOSTREAMS)] = "https://addon.example/manifest.json"
+        coEvery { torrentio.streamsAt("https://addon.example/stream/movie/tt1234567.json") } returns TorrentioStreamResponse(
+            listOf(
+                TorrentioStreamDto(name = "Open video 1080p", title = "Example Movie", url = "https://video.example/open.mp4"),
+                TorrentioStreamDto(name = "error", title = "expired", url = "https://addon.example/videos/error.mp4"),
+                TorrentioStreamDto(name = "Paid", title = "Example Movie", url = "https://addon.example/resolve/paid"),
+                TorrentioStreamDto(name = "Torrent", title = "Example Movie", infoHash = hash('a')),
+            ),
+        )
+        val source = search(movie).single()
+        assertEquals("https://video.example/open.mp4", source.directUrl)
+        assertEquals(null, source.resolveUrl)
     }
 
     private fun hash(c: Char) = c.toString().repeat(40)

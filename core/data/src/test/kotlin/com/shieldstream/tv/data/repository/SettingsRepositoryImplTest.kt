@@ -43,6 +43,16 @@ class SettingsRepositoryImplTest {
     }
 
     @Test
+    fun `paid service is opt-in and persists`() = runTest {
+        val settings = repository()
+        assertFalse(settings.debridEnabled.first())
+        settings.setDebridEnabled(true)
+        assertTrue(repository().debridEnabled.first())
+        settings.setDebridEnabled(false)
+        assertFalse(repository().debridEnabled.first())
+    }
+
+    @Test
     fun `home row limit defaults to 30 and persists across reloads`() = runTest {
         assertEquals(
             SettingsRepository.DEFAULT_HOME_ROW_ITEM_LIMIT,

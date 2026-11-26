@@ -146,11 +146,11 @@ fun SetupScreen(
                 SetupStep.DEBRID -> KeyStep(
                     state = s,
                     service = s.debrid.apiService,
-                    title = localizedStringResource(SR.setup_debrid_service),
-                    intro = localizedStringResource(SR.setup_debrid_intro) +
+                    title = "Debrid (opcional)",
+                    intro = "Puedes continuar sin contratar Debrid y configurarlo después desde Ajustes. " +
                         if (s.debrid.viaTorrentio) localizedStringResource(SR.setup_debrid_torrentio) else "",
                     steps = debridSteps(s.debrid),
-                    required = true,
+                    required = false,
                     onSubmit = { viewModel.submitKey(s.debrid.apiService, it) },
                     onNext = viewModel::next,
                     onTyping = viewModel::clearError,

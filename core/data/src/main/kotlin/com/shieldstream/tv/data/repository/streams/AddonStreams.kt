@@ -35,15 +35,19 @@ internal class AddonStreams(
         bases.map { base ->
             val label = addonLabel(base, bases.size)
             async {
-                runCatching { streams(base, item, type, streamId, label = label) }
-                    .onFailure { Log.w("Catalog", "Addon $label falló (${it.javaClass.simpleName})") }
-                    .getOrDefault(emptyList())
+                try { streams(base, item, type, streamId, label = label) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) {
+                    Log.w("Catalog", "Addon $label falló (${e.javaClass.simpleName})")
+                    emptyList()
+                }
             }
         }.awaitAll().flatten()
     }
 
     suspend fun comet(item: CatalogItem, type: String, streamId: String): List<StreamSource> {
         // Comet resuelve él mismo con el servicio que se le diga: el activo, con su clave.
+        if (!settings.debridEnabled.first()) return emptyList()
         val debrid = settings.debridService.first()
         val token = store.getSecret(TokenStore.keyNameFor(debrid.apiService))?.takeIf { it.isNotBlank() } ?: return emptyList()
         // Formato actual de Comet: idiomas/resoluciones van como objetos (si se mandan como lista, como antes, Comet

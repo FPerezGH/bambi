@@ -38,7 +38,20 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build debug APK and run unit tests
-        run: ./gradlew --no-daemon --no-build-cache clean assembleDebug :core:model:test :core:domain:test testDebugUnitTest
+        shell: bash
+        run: |
+          set -o pipefail
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon --no-build-cache clean assembleDebug :core:model:test :core:domain:test testDebugUnitTest 2>&1 | tee gradle-build.log; then
+              exit 0
+            fi
+            # Retry only dependency/plugin download failures; do not hide compile or test failures.
+            if ! grep -Eq 'was not found in any of the following sources|Could not (resolve|download|GET|HEAD)' gradle-build.log || [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "Transient dependency resolution failure: retry $attempt"
+            sleep 15
+          done
 
       - name: Run Android lint
         run: ./gradlew --no-daemon lintDebug
