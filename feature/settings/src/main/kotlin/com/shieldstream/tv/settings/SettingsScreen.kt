@@ -178,6 +178,8 @@ private fun SettingsList(
                     )
                 }
             }
+            item { SectionTitle("Servicios de reproducción") }
+            item { OptionalDebridCard() }
             item { SectionTitle(localizedStringResource(StringsR.string.settings_debrid_service)) }
             item {
                 DebridSelectorCard(
@@ -368,6 +370,17 @@ private fun SettingsList(
             }
             item { PhoneConfigCard(onClick = onOpenPhoneConfig) }
             item { SetupGuideCard(onClick = onOpenSetup) }
+        }
+    }
+}
+
+@Composable
+private fun OptionalDebridCard(viewModel: SettingsViewModel = hiltViewModel()) {
+    val enabled by viewModel.debridEnabled.collectAsStateWithLifecycle()
+    FocusCard(onClick = { viewModel.setDebridEnabled(!enabled) }) { _ ->
+        Column {
+            Text("Utilizar Debrid: " + if (enabled) "Activado" else "Desactivado", color = Color.White, style = MaterialTheme.typography.titleLarge)
+            Text("Sin Debrid se reproducen enlaces directos compatibles de los addons configurados. No incluye motor torrent.", color = SettingsMuted, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

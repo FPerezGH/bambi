@@ -5,7 +5,7 @@ name: Build
 
 on:
   push:
-    branches: [cinefran, cinefran-next]
+    branches: [cinefran, cinefran-next, cinefran-stremio]
   pull_request:
   workflow_dispatch:
 
@@ -52,15 +52,15 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
           "$AAPT" dump badging "$APK" | tee apk-identity.txt
           grep -F "package: name='com.cinefran.tv.debug'" apk-identity.txt
-          grep -F "versionCode='113'" apk-identity.txt
-          grep -F "versionName='0.3.3-pruebas'" apk-identity.txt
+          grep -F "versionCode='114'" apk-identity.txt
+          grep -F "versionName='0.3.4-pruebas'" apk-identity.txt
           mkdir -p verified-apk
-          cp "$APK" verified-apk/CINEFRAN-0.3.3.apk
-          sha256sum verified-apk/CINEFRAN-0.3.3.apk | tee verified-apk/SHA256.txt
+          cp "$APK" verified-apk/CINEFRAN-Stremio-0.3.4.apk
+          sha256sum verified-apk/CINEFRAN-Stremio-0.3.4.apk | tee verified-apk/SHA256.txt
           cp apk-identity.txt verified-apk/
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: CINEFRAN-0.3.3
+          name: CINEFRAN-Stremio-0.3.4
           path: verified-apk/
           retention-days: 14

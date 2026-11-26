@@ -72,14 +72,19 @@ internal class AddonStreams(
         label: String = texts.get(StringsR.string.data_the_stremio_addon),
     ): List<StreamSource> {
         val streams = titles.withoutOtherShows(torrentio.streamsAt("$base/stream/$type/$streamId.json").streams, item)
-        streams.firstOrNull { it.isDebridError() }?.let { error(debridErrorMessage(it.title, label, texts)) }
-        return streams.mapNotNull { s ->
-            val link = s.url?.takeIf { it.startsWith("http") } ?: return@mapNotNull s.toStreamSource(item)
+        val enabled = settings.debridEnabled.first()
+        val usable = streams.filterNot { it.isDebridError() }
+        if (usable.isEmpty() && enabled) streams.firstOrNull { it.isDebridError() }?.let { error(debridErrorMessage(it.title, label, texts)) }
+        return usable.mapNotNull { s ->
+            val link = s.url?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                ?: return@mapNotNull if (enabled) s.toStreamSource(item) else null
+            if (!enabled && (s.name.contains("debrid", ignoreCase = true) || link.contains("/resolve/", ignoreCase = true))) return@mapNotNull null
             val hash = s.infoHash ?: "aio%08x".format(link.hashCode())
             s.copy(infoHash = hash).toStreamSource(item)?.copy(
-                resolveUrl = link,
-                debrid = label,
-                isCached = s.name.contains("⚡") || s.name.contains("+]"),
+                directUrl = if (!enabled) link else null,
+                resolveUrl = if (enabled) link else null,
+                debrid = if (enabled) label else null,
+                isCached = !enabled || s.name.contains("⚡") || s.name.contains("+]"),
             )
         }
     }

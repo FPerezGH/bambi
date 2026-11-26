@@ -181,7 +181,6 @@ class SetupViewModel @Inject constructor(
 @HiltViewModel
 class SetupGateViewModel @Inject constructor(apiKeys: ApiKeysRepository) : ViewModel() {
     val needsSetup: Boolean = apiKeys.keys.value.let { keys ->
-        keys[ApiService.TMDB].isNullOrBlank() ||
-            ApiService.entries.filter { it.isDebrid }.all { keys[it].isNullOrBlank() }
+        keys[ApiService.TMDB].isNullOrBlank()
     }
 }

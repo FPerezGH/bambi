@@ -327,6 +327,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    val debridEnabled = settings.debridEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    fun setDebridEnabled(enabled: Boolean) { viewModelScope.launch { settings.setDebridEnabled(enabled) } }
+
     fun setDebrid(service: DebridService) {
         viewModelScope.launch { settings.setDebridService(service) }
     }

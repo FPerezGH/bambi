@@ -51,10 +51,16 @@ internal class StreamSearch(
     fun streams(item: CatalogItem, episode: Episode?): Flow<StreamResults> = channelFlow {
         val aioConfigured = !store.getSecret(TokenStore.keyNameFor(ApiService.AIOSTREAMS)).isNullOrBlank()
         val enabled = settings.sourceProviders.first()
+        val debridEnabled = settings.debridEnabled.first()
         // Los buscadores propios (castellano, The Pirate Bay, Knaben, Nyaa) dan torrents sueltos: se resuelven con el
         // servicio activo, sea cual sea (por su API o, si la app no la tiene, a través de Torrentio).
         val providers = SourceProvider.entries.filter {
-            it in enabled && (it != SourceProvider.AIOSTREAMS || aioConfigured)
+            it in enabled && (it != SourceProvider.AIOSTREAMS || aioConfigured) &&
+                (debridEnabled || it == SourceProvider.AIOSTREAMS)
+        }
+        if (!debridEnabled && providers.isEmpty()) {
+            send(StreamResults(emptyList(), mapOf("Addons de Stremio" to "Configura un addon con enlaces directos compatibles en Ajustes."), emptySet()))
+            return@channelFlow
         }
         val imdbId = item.imdbId ?: resolveImdb(item) ?: error(texts.get(StringsR.string.data_imdb_id_missing, item.title))
         val (type, streamId) = if (item.type == MediaType.TV) {
@@ -71,7 +77,7 @@ internal class StreamSearch(
                     val section = if (p == SourceProvider.CASTELLANO && it.provider.isNotBlank()) it.provider else texts.get(p.sectionResource)
                     it.copy(id = "${p.name}:${it.id}", provider = section)
                 }
-            }.distinctBy { it.provider + ":" + if (it.resolveUrl == null) it.infoHash.lowercase() else it.id }
+            }.distinctBy { it.provider + ":" + if (it.resolveUrl == null && it.directUrl == null) it.infoHash.lowercase() else it.id }
             val sections = providers.groupBy { texts.get(it.sectionResource) }
             val withSources = sources.map { it.provider }.toSet()
             val pending = sections.filter { (_, ps) -> ps.any { it !in done } }.keys
@@ -99,7 +105,7 @@ internal class StreamSearch(
                     }
                     r.exceptionOrNull()?.let { Log.w("Catalog", "${texts.get(p.titleResource)} falló: ${it.message}") }
                     r.getOrNull()?.let { list ->
-                        Log.i("Catalog", "${p.name}: ${list.size} fuentes (${list.count { it.isCached }} ⚡) con ${settings.debridService.first().title}")
+                        Log.i("Catalog", "${p.name}: ${list.size} fuentes (${list.count { it.isCached }} ⚡) con ${if (debridEnabled) settings.debridService.first().title else "enlaces directos"}")
                     }
                     lock.withLock {
                         done[p] = r

@@ -628,7 +628,7 @@ class DetailsViewModel @Inject constructor(
             val debridCached = HashSet<String>()
             catalogRepository.getStreams(c.details.item, episode)
                 .map { result ->
-                    val unchecked = result.sources.filter { it.resolveUrl == null }.map { it.infoHash.lowercase() }
+                    val unchecked = result.sources.filter { it.resolveUrl == null && it.directUrl == null }.map { it.infoHash.lowercase() }
                         .filter { it !in checkedHashes }.distinct()
                     if (unchecked.isNotEmpty()) {
                         checkedHashes += unchecked
@@ -640,7 +640,7 @@ class DetailsViewModel @Inject constructor(
                     }
                     val knownCached = debridCached + result.sources.filter { it.isCached }.map { it.infoHash.lowercase() }
                     val enriched = result.sources.map {
-                        if (it.resolveUrl == null) it.copy(isCached = it.infoHash.lowercase() in knownCached) else it
+                        if (it.resolveUrl == null && it.directUrl == null) it.copy(isCached = it.infoHash.lowercase() in knownCached) else it
                     }
                     result to prioritizeSourcesUseCase(
                         enriched,
