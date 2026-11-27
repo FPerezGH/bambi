@@ -13,3 +13,7 @@ La APK definitiva usa com.cinefran.tv (sin sufijo debug). La APK 0.3.5 instalada
 La copia portátil cifra preferencias, perfiles, listas, historial, series seguidas y claves API mediante AES-256-GCM y PBKDF2-HMAC-SHA256. No copia vídeos descargados ni sesiones OAuth de Trakt. La restauración sustituye datos, no los combina. Guarda una copia anterior y recuerda la contraseña. Funciona a partir de Android 8 con un selector de archivos compatible.
 
 Las compilaciones DEBUG son exclusivamente de validación: cada runner puede generar un certificado distinto. No instales sus artefactos como actualizaciones. El workflow de publicación obtiene versionCode y versionName del Gradle automáticamente y verifica la huella SHA-256 antes de publicar. El nombre de descarga permanente es CINEFRAN.apk.
+
+## Alternativa sin instalar herramientas en Windows
+
+Si no existe una firma de producción previa, se admite un único secreto de repositorio `CINEFRAN_SIGNING` con un objeto JSON que contiene `keystore_base64`, `password` y `alias`. La huella de este certificado está fijada en el workflow. La clave privada y su contraseña nunca deben incorporarse a Git ni a un issue. Conserva una copia segura fuera del repositorio. Tras crear el secreto desde Settings > Secrets and variables > Actions, vuelve a ejecutar todos los trabajos de la última ejecución Build de cinefran-stremio. El workflow publica automáticamente si todas las pruebas pasan y no existe ya esa versión. No sustituyas una firma ya utilizada en producción.

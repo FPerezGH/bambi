@@ -1,7 +1,7 @@
 # Build Bambi on every push and pull request, and manually from the Actions tab.
 # Without credentials: local.properties is not tracked, so the APK contains no preloaded keys
 # (equivalent to seedKeys=false) and uses a disposable debug key. Never distribute that APK as an update.
-# The manual publish job requires the permanent CINEFRAN certificate.
+# Publication requires the permanent CINEFRAN certificate and successful validation.
 name: Build
 
 on:
@@ -45,6 +45,8 @@ jobs:
 
       - name: Build debug APK and run unit tests
         shell: bash
+        env:
+          JAVA_TOOL_OPTIONS: '-Drobolectric.dependency.repo.url=https://repo.maven.apache.org/maven2'
         run: |
           set -o pipefail
           for attempt in 1 2 3; do
@@ -52,7 +54,7 @@ jobs:
               exit 0
             fi
             # Retry only dependency/plugin download failures; do not hide compile or test failures.
-            if ! grep -Eq 'was not found in any of the following sources|Could not (resolve|download|GET|HEAD)' gradle-build.log || [ "$attempt" -eq 3 ]; then
+            if ! grep -Eq 'was not found in any of the following sources|Could not (resolve|download|GET|HEAD)|MavenArtifactFetcher.java' gradle-build.log || [ "$attempt" -eq 3 ]; then
               exit 1
             fi
             echo "Transient dependency resolution failure: retry $attempt"
@@ -90,7 +92,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/cinefran-stremio' }}
+    if: ${{ github.ref == 'refs/heads/cinefran-stremio' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) }}
     needs: build
     permissions:
       contents: write
@@ -103,9 +105,31 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Configure permanent signing
+      - name: Check publication prerequisites
+        id: ready
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNING_BUNDLE: ${{ secrets.CINEFRAN_SIGNING }}
+          LEGACY_KEY: ${{ secrets.CINEFRAN_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          VERSION=$(awk -F'"' '/versionName = / {print $2; exit}' app/build.gradle.kts)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [ -z "$SIGNING_BUNDLE" ] && [ -z "$LEGACY_KEY" ]; then
+            echo "::notice::Configure the CINEFRAN_SIGNING repository secret, then rerun all jobs."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::This version is already published. Increment versionCode and versionName before releasing again."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Configure permanent signing
+        if: steps.ready.outputs.publish == 'true'
+        shell: bash
+        env:
+          SIGNING_BUNDLE: ${{ secrets.CINEFRAN_SIGNING }}
           KEYSTORE_BASE64: ${{ secrets.CINEFRAN_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.CINEFRAN_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.CINEFRAN_KEY_PASSWORD }}
@@ -113,6 +137,16 @@ jobs:
           EXPECTED_CERT: ${{ vars.CINEFRAN_CERT_SHA256 }}
         run: |
           set -euo pipefail
+          if [ -n "$SIGNING_BUNDLE" ]; then
+            KEYSTORE_BASE64=$(printf '%s' "$SIGNING_BUNDLE" | jq -er .keystore_base64)
+            STORE_PASSWORD=$(printf '%s' "$SIGNING_BUNDLE" | jq -er .password)
+            KEY_PASSWORD="$STORE_PASSWORD"
+            KEY_ALIAS=$(printf '%s' "$SIGNING_BUNDLE" | jq -er .alias)
+            echo "::add-mask::$KEYSTORE_BASE64"
+            echo "::add-mask::$STORE_PASSWORD"
+            EXPECTED_CERT="a142d8905f042560fb43a15882763009a832429c01b325c90b88ccc38fd8cedb"
+          fi
+          printf 'CINEFRAN_EXPECTED_CERT=%s\n' "$EXPECTED_CERT" >> "$GITHUB_ENV"
           : "${KEYSTORE_BASE64:?Missing CINEFRAN_KEYSTORE_BASE64}"
           : "${STORE_PASSWORD:?Missing CINEFRAN_STORE_PASSWORD}"
           : "${KEY_PASSWORD:?Missing CINEFRAN_KEY_PASSWORD}"
@@ -123,11 +157,11 @@ jobs:
           printf 'releaseStoreFile=%s\nreleaseStorePassword=%s\nreleaseKeyPassword=%s\nreleaseKeyAlias=%s\nseedKeys=false\n' "$RUNNER_TEMP/cinefran.p12" "$STORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > local.properties
           printf '1' > .public_build
       - name: Build signed release
+        if: steps.ready.outputs.publish == 'true'
         run: chmod +x gradlew && ./gradlew --no-daemon :app:assembleRelease
       - name: Verify package and signing certificate
+        if: steps.ready.outputs.publish == 'true'
         shell: bash
-        env:
-          EXPECTED_CERT: ${{ vars.CINEFRAN_CERT_SHA256 }}
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/release/app-release.apk
@@ -141,18 +175,20 @@ jobs:
           echo "CINEFRAN_VERSION=$VERSION" >> "$GITHUB_ENV"
           "$SIGNER" verify --print-certs "$APK" > "$RUNNER_TEMP/cinefran-certificate.txt"
           ACTUAL=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/cinefran-certificate.txt")
-          NORMALIZED=$(printf '%s' "$EXPECTED_CERT" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          NORMALIZED=$(printf '%s' "$CINEFRAN_EXPECTED_CERT" | tr -d ':' | tr '[:upper:]' '[:lower:]')
           test "$ACTUAL" = "$NORMALIZED"
           mkdir -p "$RUNNER_TEMP/cinefran-release"
           cp "$APK" "$RUNNER_TEMP/cinefran-release/CINEFRAN.apk"
           (cd "$RUNNER_TEMP/cinefran-release" && sha256sum CINEFRAN.apk > SHA256.txt)
       - name: Upload permanently signed APK
+        if: steps.ready.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: CINEFRAN-SIGNED-${{ env.CINEFRAN_VERSION }}
           path: ${{ runner.temp }}/cinefran-release/
           retention-days: 14
       - name: Publish version
+        if: steps.ready.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
