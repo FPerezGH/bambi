@@ -13,7 +13,7 @@ data class CatalogItem(
     val genres: List<String> = emptyList(),
     val voteCount: Int = 0,
     val popularity: Double = 0.0,
-) {
+) : java.io.Serializable {
     // Bayesian shrinkage: low vote counts stay close to the reference mean.
     val weightedRating: Double get() {
         val votes = voteCount.coerceAtLeast(0).toDouble()

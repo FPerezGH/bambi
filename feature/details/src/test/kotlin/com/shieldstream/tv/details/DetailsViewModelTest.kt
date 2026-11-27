@@ -1,5 +1,6 @@
 package com.shieldstream.tv.details
 
+import androidx.lifecycle.SavedStateHandle
 import com.shieldstream.tv.domain.CatalogRepository
 import com.shieldstream.tv.domain.EpisodeTarget
 import com.shieldstream.tv.domain.EpisodeTrackingRepository
@@ -410,12 +411,29 @@ class DetailsViewModelTest {
         )
     }
 
+    @Test
+    fun `restores movie details after process recreation with an empty selection holder`() = runTest {
+        val item = CatalogItem("42", "tt42", MediaType.MOVIE, "Movie", "", null, null, 2020, null)
+        val catalog = mockk<CatalogRepository>()
+        coEvery { catalog.getDetails(item) } returns CatalogDetails(item)
+        every { catalog.getStreams(item, null) } returns flowOf(StreamResults(sources = emptyList()))
+        val savedState = SavedStateHandle()
+        viewModel(catalog, SelectedContentHolder().apply { selectItem(item) }, savedState = savedState)
+        testScheduler.advanceUntilIdle()
+        val emptyHolder = SelectedContentHolder()
+        val restored = viewModel(catalog, emptyHolder, savedState = savedState)
+        testScheduler.advanceUntilIdle()
+        assertEquals(item, (restored.uiState.value as DetailsUiState.Content).details.item)
+        assertNull(emptyHolder.playback.value)
+    }
+
     private fun viewModel(
         catalog: CatalogRepository,
         holder: SelectedContentHolder,
         watchProgress: WatchProgressRepository? = null,
         exclusions: SourceExclusions = SourceExclusions(),
         trakt: TraktRepository = mockk(relaxed = true),
+        savedState: SavedStateHandle = SavedStateHandle(),
     ): DetailsViewModel =
         DetailsViewModel(
             catalogRepository = catalog,
@@ -462,6 +480,7 @@ class DetailsViewModelTest {
                 every { messages } returns kotlinx.coroutines.flow.MutableSharedFlow()
             },
             debridCache = mockk(relaxed = true),
+            savedState = savedState,
         )
 
     private fun source(episode: Episode) = StreamSource(

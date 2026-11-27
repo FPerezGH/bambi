@@ -128,6 +128,13 @@ fun DetailsScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onScreenHidden() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onScreenResumed() }
 
+    // If an old navigation entry has no recoverable title, leave it rather than trapping the user.
+    val missingTitle = state is DetailsUiState.Error
+    BackHandler(enabled = state !is DetailsUiState.Content, onBack = onBack)
+    LaunchedEffect(missingTitle, lifecycleOwner) {
+        if (missingTitle) lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { onBack() }
+    }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when (val s = state) {
             DetailsUiState.Loading -> CircularProgressIndicator(

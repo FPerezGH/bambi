@@ -4,9 +4,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import com.shieldstream.tv.strings.R as StringsR
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shieldstream.tv.domain.CatalogRepository
+import com.shieldstream.tv.domain.DetailsRequest
+import com.shieldstream.tv.domain.EpisodeTarget
 import com.shieldstream.tv.domain.EpisodeTrackingRepository
 import com.shieldstream.tv.domain.PrioritizeSourcesUseCase
 import com.shieldstream.tv.domain.RealDebridRepository
@@ -21,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import com.shieldstream.tv.media.DeviceCapabilityDetector
 import com.shieldstream.tv.model.DeviceOptimization
 import com.shieldstream.tv.model.CatalogDetails
+import com.shieldstream.tv.model.CatalogItem
 import com.shieldstream.tv.model.Episode
 import com.shieldstream.tv.model.MediaType
 import com.shieldstream.tv.model.PlaybackMedia
@@ -59,6 +63,7 @@ class DetailsViewModel @Inject constructor(
     private val downloads: com.shieldstream.tv.domain.DownloadsRepository,
     private val planner: DownloadPlanner,
     private val debridCache: com.shieldstream.tv.domain.DebridCacheRepository,
+    private val savedState: SavedStateHandle,
 ) : ViewModel() {
 
     /** Descargas (para enseñar el estado en la ficha y reproducir lo descargado). */
@@ -289,12 +294,22 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun load() {
-        val request = holder.details.value
+        // Navigation restores this entry after Android reclaims the background process.
+        // Never replay an autoplay request during restoration.
+        val restoredItem = savedState.get<CatalogItem>(STATE_ITEM)
+        val request = if (restoredItem != null) {
+            val target = savedState.get<Int>(STATE_SEASON)?.let { season ->
+                EpisodeTarget(season, savedState.get<Int>(STATE_EPISODE) ?: 1)
+            }
+            DetailsRequest(restoredItem, target, playImmediately = false)
+        } else holder.details.value
         if (request == null) {
             _uiState.value = DetailsUiState.Error(texts.get(StringsR.string.details_no_title_selected))
             return
         }
         val item = request.item
+        savedState[STATE_ITEM] = item.copy(genres = ArrayList(item.genres))
+        request.target?.let { rememberTarget(it.season, it.number) }
         requestedAtNs = request.requestedAtNs
         detailsLoaded = false
         trace("details_opened")
@@ -417,6 +432,7 @@ class DetailsViewModel @Inject constructor(
     ) {
         val content = content() ?: return
         if (preferredEpisode == null && content.selectedSeason == season && content.episodes is EpisodesState.Ready) return
+        rememberTarget(season, preferredEpisode ?: 1)
         episodesJob?.cancel()
         sourcesJob?.cancel()
         updateContent {
@@ -520,7 +536,9 @@ class DetailsViewModel @Inject constructor(
     fun openStremio(episode: Episode? = null) {
         val c = content() ?: return
         if (!c.stremioExternal) return
-        _events.tryEmit(DetailsEvent.OpenStremio(c.details.item, episode?.takeIf { c.isSeries }))
+        val target = episode?.takeIf { c.isSeries }
+        target?.let { rememberTarget(it.season, it.number) }
+        _events.tryEmit(DetailsEvent.OpenStremio(c.details.item, target))
     }
 
     fun ensureSources() {
@@ -799,6 +817,7 @@ class DetailsViewModel @Inject constructor(
         manualPick: Boolean = false,
     ) {
         val item = c.details.item
+        episode?.let { rememberTarget(it.season, it.number) }
         val label = episode?.let { "${item.title} · ${texts.episodeCode(it)} · ${it.title}" } ?: item.title
         val media = PlaybackMedia(
             type = item.type,
@@ -832,11 +851,19 @@ class DetailsViewModel @Inject constructor(
         Log.i(STARTUP_TRACE_TAG, "stage=$stage totalMs=$totalMs" + if (details.isEmpty()) "" else " $details")
     }
 
+    private fun rememberTarget(season: Int, episode: Int) {
+        savedState[STATE_SEASON] = season
+        savedState[STATE_EPISODE] = episode
+    }
+
     private fun updateContent(transform: (DetailsUiState.Content) -> DetailsUiState.Content) {
         _uiState.update { s -> if (s is DetailsUiState.Content) transform(s) else s }
     }
 
     private companion object {
+        const val STATE_ITEM = "cinefran.details.item"
+        const val STATE_SEASON = "cinefran.details.season"
+        const val STATE_EPISODE = "cinefran.details.episode"
         const val STARTUP_TRACE_TAG = "StartupTrace"
         const val MAX_QUEUE = 30
         const val MIN_CACHED_TO_START = 3
