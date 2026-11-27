@@ -15,8 +15,17 @@ class OfficialPlatformLauncherTest {
             OfficialPlatformLauncher.links("netflix", "80057281", PlatformOpening.PLAY, true))
     }
     @Test fun maxUsesOfficialTitleLink() {
-        assertEquals(listOf("https://play.hbomax.com/movie/dfa50804-e6f6-4fa2-a732-693dbc50527b"),
+        assertEquals(listOf("https://play.hbomax.com/movie/dfa50804-e6f6-4fa2-a732-693dbc50527b", "https://play.max.com/movie/dfa50804-e6f6-4fa2-a732-693dbc50527b"),
             OfficialPlatformLauncher.links("max", "movie/dfa50804-e6f6-4fa2-a732-693dbc50527b", PlatformOpening.PLAY, false))
+    }
+    @Test fun movistarExactHostOnly() {
+        assertEquals("https://ver.movistarplus.es/ficha/?id=4201526", OfficialPlatformLauncher.officialUrl("movistar", "https://ver.movistarplus.es/ficha/?id=4201526"))
+        assertEquals(null, OfficialPlatformLauncher.officialUrl("movistar", "https://www.mediasetinfinity.es/ficha/?id=4201526"))
+        assertEquals(null, OfficialPlatformLauncher.officialUrl("movistar", "https://ver.movistarplus.es.evil.test/ficha/?id=4201526"))
+        assertEquals(listOf("es.plus.yomvi"), com.shieldstream.tv.model.StreamingPlatforms.packages("movistar"))
+    }
+    @Test fun primeAcceptsAsin() {
+        assertTrue(OfficialPlatformLauncher.links("prime", "B07ZPDN57Q", PlatformOpening.PLAY, false).isNotEmpty())
     }
     @Test fun rejectsUnknownOrUnsafeIds() {
         assertTrue(OfficialPlatformLauncher.links("netflix", "https://example.com", PlatformOpening.PLAY, false).isEmpty())

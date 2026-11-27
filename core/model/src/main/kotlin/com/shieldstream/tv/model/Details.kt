@@ -124,6 +124,7 @@ data class Episode(
     val stillUrl: String?,
     val runtimeMinutes: Int?,
     val airDate: String? = null,
+    val tmdbId: Int? = null,
 )
 
 enum class HomeFilter { ALL, MOVIES, TV }

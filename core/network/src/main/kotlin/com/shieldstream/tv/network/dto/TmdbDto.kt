@@ -179,6 +179,7 @@ data class TmdbEpisodeDto(
     val still_path: String? = null,
     val runtime: Int? = null,
     val air_date: String? = null,
+    val id: Int? = null,
 )
 
 @Serializable

@@ -43,10 +43,11 @@ import com.shieldstream.tv.ui.component.tvClickable
 internal suspend fun openOfficialPlatform(
     context: Context, platform: String, item: CatalogItem, availabilityUrl: String?,
     mode: PlatformOpening = PlatformOpening.PLAY,
-): String? = OfficialPlatformLauncher.open(context, platform, item, availabilityUrl, mode)
+    episode: com.shieldstream.tv.model.Episode? = null,
+): String? = OfficialPlatformLauncher.open(context, platform, item, availabilityUrl, mode, episode)
 
 @Composable
-internal fun OfficialPlatformButtons(platforms: List<PlatformAvailability>, item: CatalogItem, interactive: Boolean, mode: PlatformOpening) {
+internal fun OfficialPlatformButtons(platforms: List<PlatformAvailability>, item: CatalogItem, interactive: Boolean, mode: PlatformOpening, episode: com.shieldstream.tv.model.Episode? = null) {
     if (platforms.isEmpty()) return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -71,7 +72,7 @@ internal fun OfficialPlatformButtons(platforms: List<PlatformAvailability>, item
                         .then(if (enabled) Modifier.onFocusChanged { focused = it.isFocused }.tvClickable {
                             scope.launch {
                                 opening = true
-                                try { message = openOfficialPlatform(context, platform.key, item, platform.availabilityUrl, mode) }
+                                try { message = openOfficialPlatform(context, platform.key, item, platform.availabilityUrl, mode, episode) }
                                 finally { opening = false }
                             }
                         } else Modifier)

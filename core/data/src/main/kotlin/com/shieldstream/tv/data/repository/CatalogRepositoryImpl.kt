@@ -985,6 +985,7 @@ class CatalogRepositoryImpl @Inject constructor(
             stillUrl = still_path?.let { TmdbImages.still(it) },
             runtimeMinutes = runtime,
             airDate = air_date,
+            tmdbId = id?.takeIf { it > 0 },
         )
     }
 

@@ -577,7 +577,7 @@ private fun InfoBlock(
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (state.stremioExternal) StremioPlatformButton(interactive, Modifier.focusRequester(playRequester), onStremio)
-            OfficialPlatformButtons(details.platformButtons, item, interactive, details.platformOpening)
+            OfficialPlatformButtons(details.platformButtons, item, interactive, details.platformOpening, state.selectedEpisode.takeIf { state.isSeries })
             com.shieldstream.tv.ui.component.WatchedBadge(com.shieldstream.tv.ui.component.rememberWatchedCount(item), state.isSeries)
         }
         if (state.stremioExternal || details.platformButtons.isNotEmpty()) Spacer(Modifier.height(12.dp))

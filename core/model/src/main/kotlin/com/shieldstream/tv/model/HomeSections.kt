@@ -40,7 +40,7 @@ object StreamingPlatforms {
     fun packages(key: String): List<String> = when (key) {
         "netflix" -> listOf("com.netflix.ninja")
         "prime" -> listOf("com.amazon.amazonvideo.livingroom")
-        "max" -> listOf("com.wbd.stream", "com.hbo.hbonow")
+        "max" -> listOf("com.wbd.stream", "com.wbd.hbomax", "com.hbo.hbonow")
         "movistar" -> listOf("es.plus.yomvi")
         "vodafone" -> listOf("com.vodafone.vtv")
         else -> emptyList()
