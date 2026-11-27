@@ -11,3 +11,5 @@ La APK definitiva usa com.cinefran.tv (sin sufijo debug). La APK 0.3.5 instalada
 7. En versiones futuras, conserva el mismo applicationId y certificado, incrementa versionCode y versionName, y publica con el mismo workflow. El actualizador solo acepta CINEFRAN.apk de este repositorio, firma coincidente y versionCode superior.
 
 La copia portátil cifra preferencias, perfiles, listas, historial, series seguidas y claves API mediante AES-256-GCM y PBKDF2-HMAC-SHA256. No copia vídeos descargados ni sesiones OAuth de Trakt. La restauración sustituye datos, no los combina. Guarda una copia anterior y recuerda la contraseña. Funciona a partir de Android 8 con un selector de archivos compatible.
+
+Las compilaciones DEBUG son exclusivamente de validación: cada runner puede generar un certificado distinto. No instales sus artefactos como actualizaciones. El workflow de publicación obtiene versionCode y versionName del Gradle automáticamente y verifica la huella SHA-256 antes de publicar. El nombre de descarga permanente es CINEFRAN.apk.

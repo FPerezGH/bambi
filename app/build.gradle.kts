@@ -60,10 +60,11 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = rootProject.file(localProps.getProperty("releaseStoreFile") ?: "keystore/butaca.keystore")
-            storePassword = localProps.getProperty("releaseStorePassword") ?: "android"
-            keyAlias = localProps.getProperty("releaseKeyAlias") ?: "androiddebugkey"
-            keyPassword = localProps.getProperty("releaseKeyPassword") ?: "android"
+            // Never fall back to a disposable debug certificate for a production build.
+            storeFile = localProps.getProperty("releaseStoreFile")?.let { rootProject.file(it) }
+            storePassword = localProps.getProperty("releaseStorePassword")
+            keyAlias = localProps.getProperty("releaseKeyAlias")
+            keyPassword = localProps.getProperty("releaseKeyPassword")
         }
     }
 

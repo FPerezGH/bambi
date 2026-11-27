@@ -1,6 +1,7 @@
 # Build Bambi on every push and pull request, and manually from the Actions tab.
 # Without credentials: local.properties is not tracked, so the APK contains no preloaded keys
-# (equivalent to seedKeys=false) and is signed with the debug key. This validates the build; it does not publish it.
+# (equivalent to seedKeys=false) and uses a disposable debug key. Never distribute that APK as an update.
+# The manual publish job requires the permanent CINEFRAN certificate.
 name: Build
 
 on:
@@ -70,16 +71,21 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
           "$AAPT" dump badging "$APK" | tee apk-identity.txt
           grep -F "package: name='com.cinefran.tv.debug'" apk-identity.txt
-          grep -F "versionCode='116'" apk-identity.txt
-          grep -F "versionName='0.3.6-pruebas'" apk-identity.txt
+          VERSION=$(awk -F'"' '/versionName = / {print $2; exit}' app/build.gradle.kts)
+          CODE=$(awk '/^[[:space:]]*versionCode = / {print $3; exit}' app/build.gradle.kts)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$CODE" =~ ^[0-9]+$ ]]
+          grep -F "versionCode='$CODE'" apk-identity.txt
+          grep -F "versionName='$VERSION-pruebas'" apk-identity.txt
           mkdir -p verified-apk
-          cp "$APK" verified-apk/CINEFRAN-Stremio-0.3.6.apk
-          sha256sum verified-apk/CINEFRAN-Stremio-0.3.6.apk | tee verified-apk/SHA256.txt
+          cp "$APK" "verified-apk/CINEFRAN-DEBUG-$VERSION.apk"
+          (cd verified-apk && sha256sum "CINEFRAN-DEBUG-$VERSION.apk" > SHA256.txt)
+          echo "CINEFRAN_VERSION=$VERSION" >> "$GITHUB_ENV"
           cp apk-identity.txt verified-apk/
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: CINEFRAN-Stremio-0.3.6
+          name: CINEFRAN-DEBUG-${{ env.CINEFRAN_VERSION }}
           path: verified-apk/
           retention-days: 14
 
@@ -127,18 +133,30 @@ jobs:
           APK=app/build/outputs/apk/release/app-release.apk
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
           SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          "$AAPT" dump badging "$APK" | grep -F "package: name='com.cinefran.tv' versionCode='116' versionName='0.3.6'"
-          ACTUAL=$("$SIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          VERSION=$(awk -F'"' '/versionName = / {print $2; exit}' app/build.gradle.kts)
+          CODE=$(awk '/^[[:space:]]*versionCode = / {print $3; exit}' app/build.gradle.kts)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$CODE" =~ ^[0-9]+$ ]]
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.cinefran.tv' versionCode='$CODE' versionName='$VERSION'"
+          echo "CINEFRAN_VERSION=$VERSION" >> "$GITHUB_ENV"
+          "$SIGNER" verify --print-certs "$APK" > "$RUNNER_TEMP/cinefran-certificate.txt"
+          ACTUAL=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/cinefran-certificate.txt")
           NORMALIZED=$(printf '%s' "$EXPECTED_CERT" | tr -d ':' | tr '[:upper:]' '[:lower:]')
           test "$ACTUAL" = "$NORMALIZED"
           mkdir -p "$RUNNER_TEMP/cinefran-release"
           cp "$APK" "$RUNNER_TEMP/cinefran-release/CINEFRAN.apk"
           (cd "$RUNNER_TEMP/cinefran-release" && sha256sum CINEFRAN.apk > SHA256.txt)
+      - name: Upload permanently signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CINEFRAN-SIGNED-${{ env.CINEFRAN_VERSION }}
+          path: ${{ runner.temp }}/cinefran-release/
+          retention-days: 14
       - name: Publish version
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.3.6 "$RUNNER_TEMP/cinefran-release/CINEFRAN.apk" "$RUNNER_TEMP/cinefran-release/SHA256.txt" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "CINEFRAN 0.3.6" --notes "Firma permanente, copia de seguridad cifrada y actualizaciones verificadas." --latest
+          gh release create "v$CINEFRAN_VERSION" "$RUNNER_TEMP/cinefran-release/CINEFRAN.apk" "$RUNNER_TEMP/cinefran-release/SHA256.txt" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "CINEFRAN $CINEFRAN_VERSION" --notes "Firma permanente, copia de seguridad cifrada y actualizaciones verificadas." --latest
       - name: Remove signing material
         if: always()
         run: rm -f local.properties "$RUNNER_TEMP/cinefran.p12"

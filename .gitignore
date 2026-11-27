@@ -12,6 +12,8 @@ local.properties
 keystore/
 *.jks
 *.keystore
+*.p12
+*.pfx
 
 # --- Versiones generadas (los APK) ---
 releases/
