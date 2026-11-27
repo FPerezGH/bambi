@@ -154,11 +154,22 @@ jobs:
           : "${EXPECTED_CERT:?Missing CINEFRAN_CERT_SHA256}"
           umask 077
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/cinefran.p12"
+          # Verify the public certificate in the supplied keystore before building.
+          export STORE_PASSWORD
+          keytool -exportcert -storetype PKCS12 -keystore "$RUNNER_TEMP/cinefran.p12" -alias "$KEY_ALIAS" -storepass:env STORE_PASSWORD -file "$RUNNER_TEMP/cinefran-public.cer"
+          KEYSTORE_CERT=$(sha256sum "$RUNNER_TEMP/cinefran-public.cer" | awk '{print $1}')
+          NORMALIZED=$(printf '%s' "$EXPECTED_CERT" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')
+          echo "Expected certificate: $NORMALIZED"
+          echo "Keystore certificate: $KEYSTORE_CERT"
+          if [ "$KEYSTORE_CERT" != "$NORMALIZED" ]; then
+            echo "::error::The configured keystore certificate does not match the permanent certificate."
+            exit 1
+          fi
           printf 'releaseStoreFile=%s\nreleaseStorePassword=%s\nreleaseKeyPassword=%s\nreleaseKeyAlias=%s\nseedKeys=false\n' "$RUNNER_TEMP/cinefran.p12" "$STORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > local.properties
           printf '1' > .public_build
       - name: Build signed release
         if: steps.ready.outputs.publish == 'true'
-        run: chmod +x gradlew && ./gradlew --no-daemon :app:assembleRelease
+        run: chmod +x gradlew && ./gradlew --no-daemon --no-build-cache :app:assembleRelease
       - name: Verify package and signing certificate
         if: steps.ready.outputs.publish == 'true'
         shell: bash
@@ -173,10 +184,19 @@ jobs:
           [[ "$CODE" =~ ^[0-9]+$ ]]
           "$AAPT" dump badging "$APK" | grep -F "package: name='com.cinefran.tv' versionCode='$CODE' versionName='$VERSION'"
           echo "CINEFRAN_VERSION=$VERSION" >> "$GITHUB_ENV"
-          "$SIGNER" verify --print-certs "$APK" > "$RUNNER_TEMP/cinefran-certificate.txt"
-          ACTUAL=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/cinefran-certificate.txt")
-          NORMALIZED=$(printf '%s' "$CINEFRAN_EXPECTED_CERT" | tr -d ':' | tr '[:upper:]' '[:lower:]')
-          test "$ACTUAL" = "$NORMALIZED"
+          # Print public verification diagnostics; never bypass signature verification.
+          if ! "$SIGNER" verify --verbose --print-certs "$APK" 2>&1 | tee "$RUNNER_TEMP/cinefran-certificate.txt"; then
+            echo "::error::Android apksigner rejected the APK."
+            exit 1
+          fi
+          ACTUAL=$(awk 'tolower($0) ~ /^signer #1 certificate( #1)? sha-256 digest:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub(/[:[:space:]]/, ""); print tolower($0)}' "$RUNNER_TEMP/cinefran-certificate.txt")
+          NORMALIZED=$(printf '%s' "$CINEFRAN_EXPECTED_CERT" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')
+          echo "Expected certificate: $NORMALIZED"
+          echo "APK certificate: $ACTUAL"
+          if [[ ! "$ACTUAL" =~ ^[0-9a-f]{64}$ ]] || [ "$ACTUAL" != "$NORMALIZED" ]; then
+            echo "::error::APK certificate missing or different from the permanent signing certificate."
+            exit 1
+          fi
           mkdir -p "$RUNNER_TEMP/cinefran-release"
           cp "$APK" "$RUNNER_TEMP/cinefran-release/CINEFRAN.apk"
           (cd "$RUNNER_TEMP/cinefran-release" && sha256sum CINEFRAN.apk > SHA256.txt)
