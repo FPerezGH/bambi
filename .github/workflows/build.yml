@@ -189,7 +189,10 @@ jobs:
             echo "::error::Android apksigner rejected the APK."
             exit 1
           fi
-          ACTUAL=$(awk 'tolower($0) ~ /^signer #1 certificate( #1)? sha-256 digest:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub(/[:[:space:]]/, ""); print tolower($0)}' "$RUNNER_TEMP/cinefran-certificate.txt")
+          # New build-tools use "V2 Signer:"; older ones use "Signer #1".
+          grep -Fx 'Verified using v2 scheme (APK Signature Scheme v2): true' "$RUNNER_TEMP/cinefran-certificate.txt"
+          grep -Fx 'Number of signers: 1' "$RUNNER_TEMP/cinefran-certificate.txt"
+          ACTUAL=$(awk 'tolower($0) ~ /^(v[23](\.[12])? signer( #[0-9]+)?:[[:space:]]*certificate|signer #1 certificate( #1)?) sha-256 digest:/ {sub(/^.*[Dd][Ii][Gg][Ee][Ss][Tt]:[[:space:]]*/, ""); gsub(/[:[:space:]]/, ""); print tolower($0)}' "$RUNNER_TEMP/cinefran-certificate.txt" | sort -u)
           NORMALIZED=$(printf '%s' "$CINEFRAN_EXPECTED_CERT" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')
           echo "Expected certificate: $NORMALIZED"
           echo "APK certificate: $ACTUAL"
